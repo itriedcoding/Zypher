@@ -122,8 +122,10 @@ jobs:
           -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
       - name: Build
         run: |
+          # GitHub runs steps with bash -e; keep going so the diagnostics below run.
+          set +e
           set -o pipefail
-          cmake --build build --parallel 2 2>&1 | tee build.log
+          cmake --build build --parallel 2 2>&1 | tee build.log || true
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo "::error::macOS build failed; compiler diagnostics follow"
