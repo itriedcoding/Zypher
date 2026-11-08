@@ -71,24 +71,27 @@ jobs:
         env:
           VERSION_NUMBER: ${{ env.VERSION }}
         run: |
-          # Stage the artifacts explicitly: `cmake --install` fails on the
-          # universal macOS build because the archive is not where the generated
-          # install script expects it, which previously shipped a package with no
-          # runtime. Assert every required artifact instead of trusting install.
-          set +e
+          # Stage explicitly: `cmake --install` does not work on the universal
+          # macOS build and previously shipped a package with no runtime. The
+          # artifacts are located anywhere in the workspace, then asserted.
           set -o pipefail
           run_stage() {
             set -e
             version="${VERSION#v}"
-            prefix="${GITHUB_WORKSPACE}/stage"
+            prefix="$GITHUB_WORKSPACE/stage"
             rm -rf "$prefix"
             mkdir -p "$prefix/bin" "$prefix/lib" "$prefix/include/zypher-editor" "$prefix/share/zypher"
 
-            runtime_bin=$(find build -type f -name 'zypher_runtime' -print -quit)
-            engine_lib=$(find build -type f -name 'libzypher_engine.a' -print -quit)
-            editor_lib=$(find build -type f -name 'libzypher_editor_core.a' -print -quit)
-            test -n "$runtime_bin"
-            test -n "$engine_lib"
+            runtime_bin=$(find "$GITHUB_WORKSPACE" -path '*/.git' -prune -o -type f -name 'zypher_runtime' -print -quit)
+            engine_lib=$(find "$GITHUB_WORKSPACE" -path '*/.git' -prune -o -type f -name 'libzypher_engine.a' -print -quit)
+            editor_lib=$(find "$GITHUB_WORKSPACE" -path '*/.git' -prune -o -type f -name 'libzypher_editor_core.a' -print -quit)
+
+            if [ -z "$runtime_bin" ] || [ -z "$engine_lib" ]; then
+              echo "::error::staged artifacts not found (runtime='${runtime_bin}' engine='${engine_lib}')"
+              echo "::error::workspace top level: $(ls -A "$GITHUB_WORKSPACE" | tr '\n' ' ')"
+              echo "::error::build tree: $(find "$GITHUB_WORKSPACE/build" -maxdepth 2 -type d 2>/dev/null | head -n 8 | tr '\n' ' ')"
+              return 1
+            fi
 
             install -m 755 "$runtime_bin" "$prefix/bin/zypher_runtime"
             install -m 644 "$engine_lib" "$prefix/lib/libzypher_engine.a"
@@ -102,31 +105,20 @@ jobs:
             cp -R docs "$prefix/share/zypher/docs"
             cp README.md LICENSE "$prefix/share/zypher/"
 
-            test -x "$prefix/bin/zypher_runtime"
             python3 tools/scripts/package_release.py \
                 --version "$version" --platform macos-universal \
                 --input "$prefix" --output dist
-            python3 - "dist/zypher-${version}-macos-universal.zip" "bin/zypher_runtime" <<'PY'
+            python3 - "dist/zypher-${version}-macos-universal.zip" <<'PY'
           import sys
           import zipfile
           members = zipfile.ZipFile(sys.argv[1]).namelist()
-          if not any(name.endswith(sys.argv[2]) for name in members):
-              raise SystemExit(f"packaged archive is missing {sys.argv[2]}")
-          print(f"packaged archive contains {sys.argv[2]} ({len(members)} files)")
+          for required in ("bin/zypher_runtime", "lib/libzypher_engine.a"):
+              if not any(name.endswith(required) for name in members):
+                  raise SystemExit(f"packaged archive is missing {required}")
+          print(f"packaged archive verified ({len(members)} files)")
           PY
           }
-          set -x
-          run_stage 2>&1 | tee stage.log
-          status=${PIPESTATUS[0]}
-          set +x
-          if [ "$status" -ne 0 ]; then
-            echo "::error::macOS staging failed; trace follows"
-            tail -n 30 stage.log | tr -d '\r' | while IFS= read -r line; do
-              echo "::error::${line:0:900}"
-            done
-            exit "$status"
-          fi
-
+          run_stage
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dist
@@ -182,14 +174,14 @@ jobs:
           $share = Join-Path $prefix 'share/zypher'
           New-Item -ItemType Directory -Force -Path (Join-Path $prefix 'bin'), (Join-Path $prefix 'lib'), (Join-Path $prefix 'include/zypher-editor'), $share | Out-Null
 
-          $runtime = Get-ChildItem -Path build -Recurse -Filter 'zypher_runtime.exe' -File | Select-Object -First 1
-          $engineLib = Get-ChildItem -Path build -Recurse -Filter 'zypher_engine.lib' -File | Select-Object -First 1
+          $runtime = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter 'zypher_runtime.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          $engineLib = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter 'zypher_engine.lib' -File -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $runtime) { throw 'zypher_runtime.exe was not built' }
           if (-not $engineLib) { throw 'zypher_engine.lib was not built' }
 
           Copy-Item $runtime.FullName (Join-Path $prefix 'bin/zypher_runtime.exe')
           Copy-Item $engineLib.FullName (Join-Path $prefix 'lib/zypher_engine.lib')
-          $editorLib = Get-ChildItem -Path build -Recurse -Filter 'zypher_editor_core.lib' -File | Select-Object -First 1
+          $editorLib = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter 'zypher_editor_core.lib' -File -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($editorLib) { Copy-Item $editorLib.FullName (Join-Path $prefix 'lib/zypher_editor_core.lib') }
           Copy-Item engine/include/zypher (Join-Path $prefix 'include/zypher') -Recurse
           Copy-Item editor/core (Join-Path $prefix 'include/zypher-editor/core') -Recurse
