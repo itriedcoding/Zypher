@@ -12,9 +12,17 @@ add_executable(zypher_tests
     EngineTests.cpp
     ScriptTests.cpp)
 target_link_libraries(zypher_tests PRIVATE zypher_engine ${CMAKE_DL_LIBS})
+# MSVC treats backslashes in a string literal as escapes, so the script module
+# path is normalised to forward slashes on Windows.
+if(WIN32)
+    file(TO_CMAKE_PATH "$<TARGET_FILE:zypher_test_script>" ZYPHER_TEST_SCRIPT_MODULE_PATH)
+else()
+    set(ZYPHER_TEST_SCRIPT_MODULE_PATH "$<TARGET_FILE:zypher_test_script>")
+endif()
+
 target_compile_definitions(zypher_tests PRIVATE
     ZYPHER_TEST_DEMO_SCENE="${CMAKE_SOURCE_DIR}/samples/demo/scene.zscene"
-    ZYPHER_TEST_SCRIPT_MODULE="$<TARGET_FILE:zypher_test_script>")
+    ZYPHER_TEST_SCRIPT_MODULE="${ZYPHER_TEST_SCRIPT_MODULE_PATH}")
 add_dependencies(zypher_tests zypher_test_script)
 set_target_properties(zypher_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
