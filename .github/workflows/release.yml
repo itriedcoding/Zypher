@@ -126,7 +126,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          gh release create "$VERSION" dist/*.zip dist/*.sha256 \
-            --title "Zypher ${VERSION#v}" \
-            --notes-file docs/releases.md \
-            --verify-tag
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "release $VERSION already exists; updating assets"
+            gh release upload "$VERSION" dist/*.zip dist/*.sha256 --clobber
+          else
+            # Creates the tag at the dispatched commit when it does not exist yet.
+            gh release create "$VERSION" dist/*.zip dist/*.sha256 \
+              --title "Zypher ${VERSION#v}" \
+              --notes-file docs/releases.md \
+              --target "$GITHUB_SHA"
+          fi

@@ -15,6 +15,21 @@ pushed, or manually through `workflow_dispatch`.
 Each archive is reproducible: files are sorted, timestamps are fixed to
 1980-01-01 and permissions are normalised by `tools/scripts/package_release.py`.
 
+## Publishing automatically
+
+`.github/workflows/auto-release.yml` runs on every push to `main`. It reads the
+version from `CMakeLists.txt`; if no GitHub Release exists for `v<version>` yet,
+it dispatches the Release workflow, which builds both platforms and creates the
+release (and the tag, if it is missing). Pushes that do not bump the version
+publish nothing.
+
+You can also run **Release** manually from the Actions tab with a tag input, or
+push a tag:
+
+```bash
+./tools/scripts/release.sh 0.1.1   # bumps nothing, creates and pushes the tag
+```
+
 ## What the release job does
 
 1. Checks out the tag.

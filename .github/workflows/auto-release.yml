@@ -1,0 +1,44 @@
+name: Auto release
+
+# Runs after a push to main. If the version in CMakeLists.txt has no release
+# yet, it dispatches the Release workflow (which builds macOS + Windows archives
+# and attaches them to the GitHub Release). Pushes that do not change the version
+# do nothing, so normal development never publishes.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check-version:
+    name: Release new version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve project version
+        id: version
+        run: |
+          version=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9][0-9.]*\).*/\1/p' CMakeLists.txt | head -1)
+          if [ -z "$version" ]; then
+            echo "cannot read project version from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "project version: v$version"
+      - name: Publish when missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; nothing to do"
+            exit 0
+          fi
+          echo "dispatching release for $TAG"
+          gh workflow run release.yml --ref main -f "tag=$TAG"
