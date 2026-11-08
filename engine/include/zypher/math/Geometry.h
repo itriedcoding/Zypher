@@ -66,7 +66,7 @@ struct Aabb {
         return Aabb{min + offset, max + offset};
     }
 
-    [[nodiscard]] constexpr Aabb transformed(const Mat4& matrix) const {
+    [[nodiscard]] Aabb transformed(const Mat4& matrix) const {
         Aabb result = Aabb::inverted();
         const Vec3 corners[8] = {
             Vec3{min.x, min.y, min.z}, Vec3{max.x, min.y, min.z}, Vec3{min.x, max.y, min.z},

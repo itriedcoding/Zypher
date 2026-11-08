@@ -6,6 +6,7 @@
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 
+#include <dispatch/dispatch.h>
 #include <mach-o/dyld.h>
 #include <sys/sysctl.h>
 #include <unistd.h>

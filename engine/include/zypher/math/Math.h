@@ -45,8 +45,10 @@ inline constexpr f32 GoldenRatio = 1.61803398874989484820f;
 [[nodiscard]] constexpr f32 square(f32 value) { return value * value; }
 
 [[nodiscard]] constexpr f32 moveTowards(f32 current, f32 target, f32 maxDelta) {
+    // std::fabs is not constexpr, so use a constexpr-friendly magnitude.
     const f32 difference = target - current;
-    if (std::fabs(difference) <= maxDelta) {
+    const f32 magnitude = difference < 0.0f ? -difference : difference;
+    if (magnitude <= maxDelta) {
         return target;
     }
     return current + maxDelta * (difference < 0.0f ? -1.0f : 1.0f);
