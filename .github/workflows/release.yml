@@ -42,11 +42,12 @@ jobs:
           # GitHub runs steps with bash -e; keep going so diagnostics are reported.
           set +e
           set -o pipefail
-          cmake --build build --parallel 2 2>&1 | tee build.log || true
-          status=${PIPESTATUS[0]}
+          # No `|| true` here: running `true` resets PIPESTATUS and hides failures.
+          cmake --build build --parallel 2 2>&1 | tee build.log
+          status=$?
           if [ "$status" -ne 0 ]; then
             echo "::error::macOS universal build failed; diagnostics follow"
-            { grep -E 'error|fatal|Undefined|FAILED|ld: ' build.log | head -n 15; tail -n 15 build.log; } \
+            grep -n -B2 -A4 -E 'error:|fatal error|Undefined symbols|FAILED:|ld: ' build.log | head -n 40 \
               | tr -d '\r' | while IFS= read -r line; do
                 echo "::error::${line:0:900}"
               done
