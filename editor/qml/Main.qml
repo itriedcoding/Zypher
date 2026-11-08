@@ -14,13 +14,13 @@ ApplicationWindow {
            ? editor.projectName + (editor.dirty ? " *" : "") + " - Zypher"
            : "Zypher Editor"
 
-    readonly property color background: "#15171c"
+    readonly property color shellColor: "#15171c"
     readonly property color panel: "#1c1f26"
     readonly property color border: "#2b3038"
     readonly property color accent: "#4c9aff"
     readonly property color text: "#d7dbe3"
 
-    color: background
+    color: shellColor
 
     menuBar: MenuBar {
         Menu {

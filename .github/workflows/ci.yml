@@ -138,7 +138,12 @@ jobs:
           if [ ! -f "$qt_dir/lib/cmake/Qt6/Qt6Config.cmake" ]; then
             python3 -m venv "$RUNNER_TEMP/aqt"
             "$RUNNER_TEMP/aqt/bin/pip" install --quiet --upgrade aqtinstall
-            "$RUNNER_TEMP/aqt/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 --outputdir "$RUNNER_TEMP/Qt"
+            for attempt in 1 2 3; do
+              "$RUNNER_TEMP/aqt/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 --outputdir "$RUNNER_TEMP/Qt" \
+                && [ -f "$qt_dir/lib/cmake/Qt6/Qt6Config.cmake" ] && break
+              echo "::warning::aqt install attempt $attempt did not produce Qt; retrying"
+              sleep 15
+            done
           fi
           test -f "$qt_dir/lib/cmake/Qt6/Qt6Config.cmake"
           echo "QT_DIR=$qt_dir" >> "$GITHUB_ENV"
@@ -259,7 +264,12 @@ jobs:
           if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) {
             $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
             python -m pip install --upgrade --quiet aqtinstall
-            python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 --outputdir (Join-Path $env:RUNNER_TEMP 'Qt') --external 7z
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 --outputdir (Join-Path $env:RUNNER_TEMP 'Qt') --external 7z
+              if (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake')) { break }
+              Write-Host "::warning::aqt install attempt $attempt did not produce Qt; retrying"
+              Start-Sleep -Seconds 15
+            }
           }
           if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) { throw "Qt was not installed at $qtDir" }
           "QT_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
