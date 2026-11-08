@@ -424,13 +424,20 @@ jobs:
           if ([int]$subsystem -ne 2) { throw "zypher_editor.exe uses the console subsystem ($subsystem)" }
           $env:QT_QPA_PLATFORM = 'offscreen'
           $env:QT_QUICK_BACKEND = 'software'
-          $checkLog = Join-Path $env:RUNNER_TEMP 'editor-check.log'
-          & $installedEditor --check *> $checkLog
-          $checkExit = $LASTEXITCODE
-          Get-Content $checkLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
-          if ($checkExit -ne 0) {
-            Get-Content $checkLog -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object { Write-Host "::error::$_" }
-            throw "the installed editor self check failed with $checkExit"
+          $checkOut = Join-Path $env:RUNNER_TEMP 'editor-check.out'
+          $checkErr = Join-Path $env:RUNNER_TEMP 'editor-check.err'
+          $check = Start-Process -FilePath $installedEditor -ArgumentList '--check' -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $checkOut -RedirectStandardError $checkErr
+          foreach ($logFile in @($checkOut, $checkErr)) {
+            if (Test-Path $logFile) { Get-Content $logFile | ForEach-Object { Write-Host $_ } }
+          }
+          if ($check.ExitCode -ne 0) {
+            foreach ($logFile in @($checkOut, $checkErr)) {
+              if (Test-Path $logFile) {
+                Get-Content $logFile | Select-Object -Last 40 | ForEach-Object { Write-Host "::error::$_" }
+              }
+            }
+            throw "the editor self check failed with exit code $($check.ExitCode)"
           }
           $editorOut = Join-Path $env:RUNNER_TEMP 'editor-out.log'
           $editorErr = Join-Path $env:RUNNER_TEMP 'editor-err.log'
