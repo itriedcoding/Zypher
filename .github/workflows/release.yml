@@ -120,14 +120,19 @@ jobs:
                   raise SystemExit(f"packaged archive is missing {required}")
           print(f"packaged archive verified ({len(members)} files)")
           PY
+
+            dmg="zypher-${version}-macos-universal.dmg"
+            rm -f "dist/$dmg"
+            hdiutil create -volname "Zypher ${version}" -srcfolder "$prefix" -ov -format UDZO "dist/$dmg" > /dev/null
+            test -s "dist/$dmg"
+            ( cd dist && shasum -a 256 "$dmg" > "$dmg.sha256" )
+            echo "created $dmg"
           }
           run_stage
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dist
-          path: |
-            dist/*.zip
-            dist/*.sha256
+          path: dist/*
           if-no-files-found: error
 
   windows:
@@ -198,12 +203,22 @@ jobs:
           python -c "import sys, zipfile; members = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(n.endswith(sys.argv[2]) for n in members) else 1)" "dist/zypher-$version-windows-x64.zip" 'bin/zypher_runtime.exe'
           if ($LASTEXITCODE -ne 0) { throw 'packaged archive is missing bin/zypher_runtime.exe' }
 
+          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $sevenZip)) { throw '7-Zip is required to build the self-extracting installer' }
+          $installerName = "zypher-$version-windows-x64.exe"
+          $installer = Join-Path 'dist' $installerName
+          if (Test-Path $installer) { Remove-Item $installer -Force }
+          & $sevenZip a -mx=9 -y -sfx $installer (Join-Path $prefix '*') | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip SFX failed with $LASTEXITCODE" }
+          if (-not (Test-Path $installer)) { throw 'the Windows installer was not created' }
+          $installerHash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+          "$installerHash  $installerName" | Out-File -Encoding ascii (Join-Path 'dist' "$installerName.sha256")
+          Write-Host "created $installerName ($((Get-Item $installer).Length) bytes)"
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
-          path: |
-            dist/*.zip
-            dist/*.sha256
+          path: dist/*
           if-no-files-found: error
 
   publish:
@@ -224,11 +239,12 @@ jobs:
           VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "release $VERSION already exists; updating assets"
-            gh release upload "$VERSION" dist/*.zip dist/*.sha256 --clobber
+            echo "release $VERSION already exists; updating assets and notes"
+            gh release upload "$VERSION" dist/* --clobber
+            gh release edit "$VERSION" --notes-file docs/releases.md
           else
             # Creates the tag at the dispatched commit when it does not exist yet.
-            gh release create "$VERSION" dist/*.zip dist/*.sha256 \
+            gh release create "$VERSION" dist/* \
               --title "Zypher ${VERSION#v}" \
               --notes-file docs/releases.md \
               --target "$GITHUB_SHA"

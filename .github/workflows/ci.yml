@@ -151,6 +151,14 @@ jobs:
             done
             exit "$status"
           fi
+      - name: Package smoke test (dmg)
+        run: |
+          rm -rf "$RUNNER_TEMP/dmg-src" && mkdir -p "$RUNNER_TEMP/dmg-src/bin"
+          cp build/bin/zypher_runtime "$RUNNER_TEMP/dmg-src/bin/"
+          rm -f "$RUNNER_TEMP/zypher-smoke.dmg"
+          hdiutil create -volname ZypherSmoke -srcfolder "$RUNNER_TEMP/dmg-src" \
+              -ov -format UDZO "$RUNNER_TEMP/zypher-smoke.dmg" > /dev/null
+          test -s "$RUNNER_TEMP/zypher-smoke.dmg"
 
   windows:
     name: Windows build + tests
@@ -178,3 +186,21 @@ jobs:
         run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
       - name: Test
         run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
+      - name: Package smoke test (exe)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $sevenZip)) { throw '7-Zip is required to build the self-extracting installer' }
+          $src = Join-Path $env:RUNNER_TEMP 'sfx-src'
+          if (Test-Path $src) { Remove-Item $src -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $src | Out-Null
+          $runtime = Get-ChildItem -Path build -Recurse -Filter 'zypher_runtime.exe' -File | Select-Object -First 1
+          if (-not $runtime) { throw 'zypher_runtime.exe was not built' }
+          Copy-Item $runtime.FullName $src
+          $out = Join-Path $env:RUNNER_TEMP 'zypher-smoke.exe'
+          if (Test-Path $out) { Remove-Item $out -Force }
+          & $sevenZip a -mx=9 -y -sfx $out (Join-Path $src '*') | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip SFX failed with $LASTEXITCODE" }
+          if (-not (Test-Path $out)) { throw 'the self-extracting installer was not created' }
+          Write-Host "smoke installer: $((Get-Item $out).Length) bytes"
