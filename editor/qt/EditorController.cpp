@@ -5,7 +5,6 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFileDialog>
 #include <QFileInfo>
 
 namespace {
@@ -59,15 +58,6 @@ void EditorController::openDemoProject() {
         return;
     }
     openProject(project);
-}
-
-void EditorController::openProjectDialog() {
-    const QString path = QFileDialog::getOpenFileName(nullptr, tr("Open Zypher Project"), QString(),
-                                                      tr("Zypher projects (zypher.project.json)"));
-    if (path.isEmpty()) {
-        return;
-    }
-    openProject(path);
 }
 
 bool EditorController::openProject(const QString& path) {

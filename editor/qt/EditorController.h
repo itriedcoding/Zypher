@@ -38,7 +38,6 @@ public:
     void setInitialProject(const QString& path) { m_initialProject = path; }
 
     Q_INVOKABLE void startup();
-    Q_INVOKABLE void openProjectDialog();
     Q_INVOKABLE bool openProject(const QString& path);
     Q_INVOKABLE void openDemoProject();
     Q_INVOKABLE void saveScene();
