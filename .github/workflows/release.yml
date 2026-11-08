@@ -71,24 +71,49 @@ jobs:
         env:
           VERSION_NUMBER: ${{ env.VERSION }}
         run: |
-          # GitHub runs steps with bash -e; trace and capture so a failure here is
-          # visible as annotations (job logs are not readable without admin rights).
+          # Stage the artifacts explicitly: `cmake --install` fails on the
+          # universal macOS build because the archive is not where the generated
+          # install script expects it, which previously shipped a package with no
+          # runtime. Assert every required artifact instead of trusting install.
           set +e
           set -o pipefail
           run_stage() {
             set -e
             version="${VERSION#v}"
             prefix="${GITHUB_WORKSPACE}/stage"
-            cmake --install build --prefix "$prefix"
-            test -x "$prefix/bin/zypher_runtime"
-            mkdir -p "$prefix/share/zypher"
-            cp -R samples "$prefix/share/zypher/samples"
+            rm -rf "$prefix"
+            mkdir -p "$prefix/bin" "$prefix/lib" "$prefix/include/zypher-editor" "$prefix/share/zypher"
+
+            runtime_bin=$(find build -type f -name 'zypher_runtime' -print -quit)
+            engine_lib=$(find build -type f -name 'libzypher_engine.a' -print -quit)
+            editor_lib=$(find build -type f -name 'libzypher_editor_core.a' -print -quit)
+            test -n "$runtime_bin"
+            test -n "$engine_lib"
+
+            install -m 755 "$runtime_bin" "$prefix/bin/zypher_runtime"
+            install -m 644 "$engine_lib" "$prefix/lib/libzypher_engine.a"
+            if [ -n "$editor_lib" ]; then
+              install -m 644 "$editor_lib" "$prefix/lib/libzypher_editor_core.a"
+            fi
+            cp -R engine/include/zypher "$prefix/include/"
+            cp -R editor/core "$prefix/include/zypher-editor/"
             cp -R engine/shaders "$prefix/share/zypher/shaders"
+            cp -R samples "$prefix/share/zypher/samples"
             cp -R docs "$prefix/share/zypher/docs"
             cp README.md LICENSE "$prefix/share/zypher/"
+
+            test -x "$prefix/bin/zypher_runtime"
             python3 tools/scripts/package_release.py \
                 --version "$version" --platform macos-universal \
                 --input "$prefix" --output dist
+            python3 - "dist/zypher-${version}-macos-universal.zip" "bin/zypher_runtime" <<'PY'
+          import sys
+          import zipfile
+          members = zipfile.ZipFile(sys.argv[1]).namelist()
+          if not any(name.endswith(sys.argv[2]) for name in members):
+              raise SystemExit(f"packaged archive is missing {sys.argv[2]}")
+          print(f"packaged archive contains {sys.argv[2]} ({len(members)} files)")
+          PY
           }
           set -x
           run_stage 2>&1 | tee stage.log
@@ -101,6 +126,7 @@ jobs:
             done
             exit "$status"
           fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dist
@@ -152,19 +178,31 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $version = $env:VERSION.TrimStart('v')
           $prefix = Join-Path $env:GITHUB_WORKSPACE 'stage'
+          if (Test-Path $prefix) { Remove-Item $prefix -Recurse -Force }
           $share = Join-Path $prefix 'share/zypher'
-          cmake --install build --config Release --prefix $prefix
-          if ($LASTEXITCODE -ne 0) { throw "cmake --install failed with $LASTEXITCODE" }
-          if (-not (Test-Path (Join-Path $prefix 'bin/zypher_runtime.exe'))) {
-            throw 'staged tree is missing bin/zypher_runtime.exe'
-          }
-          New-Item -ItemType Directory -Force -Path $share | Out-Null
-          Copy-Item samples (Join-Path $share 'samples') -Recurse
+          New-Item -ItemType Directory -Force -Path (Join-Path $prefix 'bin'), (Join-Path $prefix 'lib'), (Join-Path $prefix 'include/zypher-editor'), $share | Out-Null
+
+          $runtime = Get-ChildItem -Path build -Recurse -Filter 'zypher_runtime.exe' -File | Select-Object -First 1
+          $engineLib = Get-ChildItem -Path build -Recurse -Filter 'zypher_engine.lib' -File | Select-Object -First 1
+          if (-not $runtime) { throw 'zypher_runtime.exe was not built' }
+          if (-not $engineLib) { throw 'zypher_engine.lib was not built' }
+
+          Copy-Item $runtime.FullName (Join-Path $prefix 'bin/zypher_runtime.exe')
+          Copy-Item $engineLib.FullName (Join-Path $prefix 'lib/zypher_engine.lib')
+          $editorLib = Get-ChildItem -Path build -Recurse -Filter 'zypher_editor_core.lib' -File | Select-Object -First 1
+          if ($editorLib) { Copy-Item $editorLib.FullName (Join-Path $prefix 'lib/zypher_editor_core.lib') }
+          Copy-Item engine/include/zypher (Join-Path $prefix 'include/zypher') -Recurse
+          Copy-Item editor/core (Join-Path $prefix 'include/zypher-editor/core') -Recurse
           Copy-Item engine/shaders (Join-Path $share 'shaders') -Recurse
+          Copy-Item samples (Join-Path $share 'samples') -Recurse
           Copy-Item docs (Join-Path $share 'docs') -Recurse
           Copy-Item README.md, LICENSE $share
+
           python tools/scripts/package_release.py --version $version --platform windows-x64 --input $prefix --output dist
           if ($LASTEXITCODE -ne 0) { throw "packaging failed with $LASTEXITCODE" }
+          python -c "import sys, zipfile; members = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(n.endswith(sys.argv[2]) for n in members) else 1)" "dist/zypher-$version-windows-x64.zip" 'bin/zypher_runtime.exe'
+          if ($LASTEXITCODE -ne 0) { throw 'packaged archive is missing bin/zypher_runtime.exe' }
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
