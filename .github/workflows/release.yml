@@ -88,8 +88,10 @@ jobs:
 
             if [ -z "$runtime_bin" ] || [ -z "$engine_lib" ]; then
               echo "::error::staged artifacts not found (runtime='${runtime_bin}' engine='${engine_lib}')"
-              echo "::error::workspace top level: $(ls -A "$GITHUB_WORKSPACE" | tr '\n' ' ')"
-              echo "::error::build tree: $(find "$GITHUB_WORKSPACE/build" -maxdepth 2 -type d 2>/dev/null | head -n 8 | tr '\n' ' ')"
+              echo "::error::build dir: $(ls -A "$GITHUB_WORKSPACE/build" 2>&1 | tr '\n' ' ')"
+              echo "::error::build/bin: $(ls -A "$GITHUB_WORKSPACE/build/bin" 2>&1 | tr '\n' ' ')"
+              echo "::error::build/engine: $(ls -A "$GITHUB_WORKSPACE/build/engine" 2>&1 | head -n 12 | tr '\n' ' ')"
+              echo "::error::build.log tail: $(tail -n 4 "$GITHUB_WORKSPACE/build.log" 2>&1 | tr '\n' ' ')"
               return 1
             fi
 
