@@ -35,10 +35,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          macos_asset="zypher-${VERSION}-macos-universal.zip"
+          windows_asset="zypher-${VERSION}-windows-x64.zip"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "release $TAG already exists; nothing to do"
-            exit 0
+            assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
+            if printf '%s\n' "$assets" | grep -qx "$macos_asset" && \
+               printf '%s\n' "$assets" | grep -qx "$windows_asset"; then
+              echo "release $TAG already publishes both platform archives; nothing to do"
+              exit 0
+            fi
+            echo "release $TAG is missing a platform archive; re-running the release build"
           fi
           echo "dispatching release for $TAG"
           gh workflow run release.yml --ref main -f "tag=$TAG"

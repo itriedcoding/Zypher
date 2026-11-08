@@ -76,16 +76,19 @@ jobs:
           set +e
           set -o pipefail
           run_stage() {
+            set -e
             version="${VERSION#v}"
-            cmake --install build --prefix stage
-            mkdir -p stage/share/zypher
-            cp -R samples stage/share/zypher/samples
-            cp -R engine/shaders stage/share/zypher/shaders
-            cp -R docs stage/share/zypher/docs
-            cp README.md LICENSE stage/share/zypher/
+            prefix="${GITHUB_WORKSPACE}/stage"
+            cmake --install build --prefix "$prefix"
+            test -x "$prefix/bin/zypher_runtime"
+            mkdir -p "$prefix/share/zypher"
+            cp -R samples "$prefix/share/zypher/samples"
+            cp -R engine/shaders "$prefix/share/zypher/shaders"
+            cp -R docs "$prefix/share/zypher/docs"
+            cp README.md LICENSE "$prefix/share/zypher/"
             python3 tools/scripts/package_release.py \
                 --version "$version" --platform macos-universal \
-                --input stage --output dist
+                --input "$prefix" --output dist
           }
           set -x
           run_stage 2>&1 | tee stage.log
@@ -146,14 +149,22 @@ jobs:
       - name: Stage
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $version = $env:VERSION.TrimStart('v')
-          cmake --install build --config Release --prefix stage
-          New-Item -ItemType Directory -Force -Path stage/share/zypher | Out-Null
-          Copy-Item samples stage/share/zypher/samples -Recurse
-          Copy-Item engine/shaders stage/share/zypher/shaders -Recurse
-          Copy-Item docs stage/share/zypher/docs -Recurse
-          Copy-Item README.md, LICENSE stage/share/zypher/
-          python tools/scripts/package_release.py --version $version --platform windows-x64 --input stage --output dist
+          $prefix = Join-Path $env:GITHUB_WORKSPACE 'stage'
+          $share = Join-Path $prefix 'share/zypher'
+          cmake --install build --config Release --prefix $prefix
+          if ($LASTEXITCODE -ne 0) { throw "cmake --install failed with $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $prefix 'bin/zypher_runtime.exe'))) {
+            throw 'staged tree is missing bin/zypher_runtime.exe'
+          }
+          New-Item -ItemType Directory -Force -Path $share | Out-Null
+          Copy-Item samples (Join-Path $share 'samples') -Recurse
+          Copy-Item engine/shaders (Join-Path $share 'shaders') -Recurse
+          Copy-Item docs (Join-Path $share 'docs') -Recurse
+          Copy-Item README.md, LICENSE $share
+          python tools/scripts/package_release.py --version $version --platform windows-x64 --input $prefix --output dist
+          if ($LASTEXITCODE -ne 0) { throw "packaging failed with $LASTEXITCODE" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
