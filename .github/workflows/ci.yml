@@ -138,7 +138,18 @@ jobs:
       - name: Cook demo pack
         run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          set +e
+          set -o pipefail
+          ctest --test-dir build --output-on-failure 2>&1 | tee ctest.log || true
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::error::macOS test failure; ctest output follows"
+            tail -n 30 ctest.log | tr -d '\r' | while IFS= read -r line; do
+              echo "::error::${line:0:900}"
+            done
+            exit "$status"
+          fi
 
   windows:
     name: Windows build + tests
