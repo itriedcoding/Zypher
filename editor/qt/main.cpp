@@ -99,7 +99,13 @@ int main(int argc, char* argv[]) {
                     controller.projectName().toUtf8().constData());
         std::fflush(stdout);
         QTimer::singleShot(1500, &application, [] { QCoreApplication::quit(); });
-        return application.exec();
+        const int exitCode = application.exec();
+        std::printf("zypher_editor check exit code: %d\n", exitCode);
+        for (const QString& message : g_qtMessages) {
+            std::fprintf(stderr, "qt: %s\n", message.toUtf8().constData());
+        }
+        std::fflush(stdout);
+        return exitCode;
     }
     return application.exec();
 }

@@ -3,7 +3,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
 
 ApplicationWindow {
     id: window
@@ -25,7 +24,19 @@ ApplicationWindow {
     menuBar: MenuBar {
         Menu {
             title: "File"
-            Action { text: "Open Project..."; shortcut: "Ctrl+O"; onTriggered: projectDialog.open() }
+            Action {
+                text: "Open Project..."
+                shortcut: "Ctrl+O"
+                onTriggered: {
+                    // Built on first use so startup does not touch the native dialog backend.
+                    if (projectDialog.source.toString().length === 0) {
+                        projectDialog.source = "ProjectDialog.qml"
+                    }
+                    if (projectDialog.item) {
+                        projectDialog.item.open()
+                    }
+                }
+            }
             Action { text: "Save Scene"; shortcut: "Ctrl+S"; onTriggered: editor.saveScene() }
             MenuSeparator {}
             Action { text: "Quit"; shortcut: "Ctrl+Q"; onTriggered: Qt.quit() }
@@ -127,18 +138,9 @@ ApplicationWindow {
         height: 160
     }
 
-    // QtQuick.Dialogs keeps the file picker native without pulling in QtWidgets.
-    FileDialog {
+    // Holds the native file picker; its source is set when the menu is first used.
+    Loader {
         id: projectDialog
-        title: "Open Zypher Project"
-        nameFilters: ["Zypher projects (zypher.project.json)", "All files (*)"]
-        onAccepted: {
-            var path = selectedFile.toString()
-            if (path.indexOf("file://") === 0) {
-                path = decodeURIComponent(path.substring(7))
-            }
-            editor.openProject(path)
-        }
     }
 
     Connections {

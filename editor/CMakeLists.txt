@@ -38,7 +38,8 @@ if(ZYPHER_EDITOR_QT)
         qml/SceneHierarchy.qml
         qml/Inspector.qml
         qml/AssetBrowser.qml
-        qml/ConsolePanel.qml)
+        qml/ConsolePanel.qml
+        qml/ProjectDialog.qml)
     foreach(qml_file IN LISTS zypher_editor_qml_files)
         get_filename_component(qml_name "${qml_file}" NAME)
         set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")

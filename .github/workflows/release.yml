@@ -205,7 +205,7 @@ jobs:
             QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
               "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" --check \
               > "$RUNNER_TEMP/editor-check.log" 2>&1 || {
-                echo "::error::the editor self check failed"
+                echo "::error::the editor self check failed (exit $?)"
                 tail -n 40 "$RUNNER_TEMP/editor-check.log" | tr -d '\r' | while IFS= read -r line; do
                   echo "::error::${line:0:900}"
                 done
