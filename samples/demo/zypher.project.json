@@ -1,0 +1,13 @@
+{
+  "name": "Zypher Demo",
+  "version": "0.1.0",
+  "assetRoot": "assets",
+  "output": "dist/demo.zpkg",
+  "scene": "scene.zscene",
+  "textureCompression": "none",
+  "assets": [
+    { "path": "models/cube.obj", "type": "mesh" },
+    { "path": "models/plane.obj", "type": "mesh" },
+    { "path": "models/sphere.obj", "type": "mesh" }
+  ]
+}

@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  engine-linux:
+    name: Engine (Linux, headless)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Cook demo pack
+        run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Validate assets
+        run: python3 tools/scripts/validate_assets.py samples/demo/zypher.project.json
+      - name: Render a reference frame
+        run: >
+          ./build/bin/zypher_runtime
+          --scene samples/demo/scene.zscene
+          --pack samples/demo/dist/demo.zpkg
+          --output artifacts --width 640 --height 360
+          --frames 2 --steps 120 --dump-frame
+      - name: Upload reference frame
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-frame
+          path: artifacts/frame.png
+          if-no-files-found: error
+
+  rust-cooker:
+    name: Rust asset cooker
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo test --manifest-path tools/assetcooker/Cargo.toml
+      - run: cargo clippy --manifest-path tools/assetcooker/Cargo.toml -- -D warnings
+        continue-on-error: true
+
+  typescript-panels:
+    name: TypeScript editor panels
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: editor/ts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+
+  csharp-scripting:
+    name: C# scripting layer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build tools/Zypher.Scripting.Tests/Zypher.Scripting.Tests.csproj -c Release --nologo
+      - run: dotnet run --project tools/Zypher.Scripting.Tests/Zypher.Scripting.Tests.csproj -c Release
+
+  python-tools:
+    name: Python tools
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Byte-compile scripts
+        run: python3 -m py_compile tools/scripts/*.py
+      - name: Validate workflow YAML
+        run: |
+          python3 - <<'PY'
+          import glob, yaml
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              with open(path, encoding='utf-8') as stream:
+                  yaml.safe_load(stream)
+              print('ok', path)
+          PY
+      - name: Package smoke test
+        run: |
+          mkdir -p stage/bin stage/share
+          cp README.md stage/share/
+          python3 tools/scripts/package_release.py --version 0.0.0 \
+              --platform smoke --input stage --output dist
+          test -f dist/zypher-0.0.0-smoke.zip
+          test -f dist/zypher-0.0.0-smoke.sha256
+
+  macos:
+    name: macOS build + tests
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Cook demo pack
+        run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: Windows build + tests
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel 2
+      - name: Cook demo pack
+        run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
+      - name: Test
+        run: ctest --test-dir build -C RelWithDebInfo --output-on-failure

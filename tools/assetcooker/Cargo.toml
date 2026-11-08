@@ -1,0 +1,24 @@
+[package]
+name = "zypher-assetcooker"
+version = "0.1.0"
+edition = "2021"
+description = "Zypher asset cooker: converts source assets into the runtime .zpkg format"
+license = "MIT"
+repository = "https://github.com/itriedcoding/Zypher"
+rust-version = "1.75"
+
+[[bin]]
+name = "zypher-assetcooker"
+path = "src/main.rs"
+
+[lib]
+name = "zypher_assetcooker"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[dependencies]

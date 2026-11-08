@@ -1,0 +1,6 @@
+module Zypher.Editor
+Main 1.0 Main.qml
+SceneHierarchy 1.0 SceneHierarchy.qml
+Inspector 1.0 Inspector.qml
+AssetBrowser 1.0 AssetBrowser.qml
+ConsolePanel 1.0 ConsolePanel.qml

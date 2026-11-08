@@ -1,0 +1,40 @@
+export {
+  ProjectError,
+  assetId,
+  assetsByType,
+  fnv1a64,
+  formatAssetId,
+  normalizeAssetPath,
+  parseProject,
+  parseProjectText,
+  resolveProjectPath,
+  type AssetType,
+  type Project,
+  type ProjectAsset,
+} from "./projectModel.js";
+export {
+  SceneDocument,
+  SceneError,
+  defaultEntity,
+  parseScene,
+  type Entity,
+  type Material,
+  type RigidBody,
+  type SceneCamera,
+  type SceneData,
+  type SceneEnvironment,
+  type Transform,
+  type Vec3Tuple,
+  type Vec4Tuple,
+} from "./sceneDocument.js";
+export { UndoStack, type Command } from "./undoStack.js";
+export {
+  BridgeError,
+  SceneBridge,
+  decodeRequest,
+  type BridgeOptions,
+  type PanelCommand,
+  type PanelEvent,
+  type PanelRequest,
+  type PanelResponse,
+} from "./panelBridge.js";

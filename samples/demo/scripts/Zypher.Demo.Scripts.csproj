@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Zypher.Demo.Scripts</AssemblyName>
+    <RootNamespace>Zypher.Demo.Scripts</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- NativeAOT settings used when publishing the game module. -->
+    <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../engine/scripting/csharp/Zypher.Scripting/Zypher.Scripting.csproj" />
+  </ItemGroup>
+
+</Project>

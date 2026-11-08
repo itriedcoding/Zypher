@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "comment": "Sources of truth for Zypher's standard shaders. buildctl compiles these with the configured compiler when ZYPHER_WITH_SLANG is enabled.",
+  "shaders": [
+    {
+      "name": "pbr",
+      "source": "slang/pbr.slang",
+      "entryVertex": "vertexMain",
+      "entryFragment": "fragmentMain",
+      "targets": ["spirv", "dxil", "metal"],
+      "fallbacks": {
+        "glsl": { "vertex": "glsl/pbr.vert", "fragment": "glsl/pbr.frag" },
+        "hlsl": { "vertex": "hlsl/pbr.hlsl", "fragment": "hlsl/pbr.hlsl" },
+        "msl": { "vertex": "msl/pbr.metal", "fragment": "msl/pbr.metal" }
+      }
+    },
+    {
+      "name": "ui",
+      "source": "glsl/ui.vert",
+      "entryVertex": "main",
+      "targets": ["spirv"],
+      "fallbacks": {
+        "glsl": { "vertex": "glsl/ui.vert", "fragment": "glsl/ui.frag" }
+      }
+    }
+  ],
+  "compilers": {
+    "spirv": "glslangValidator / slangc -target spirv",
+    "dxil": "dxc / slangc -target dxil",
+    "metal": "xcrun metal / slangc -target metal"
+  }
+}

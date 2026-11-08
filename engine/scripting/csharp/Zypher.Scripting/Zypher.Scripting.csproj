@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1401;CA2101;SYSLIB1054;CS1591</NoWarn>
+    <AssemblyName>Zypher.Scripting</AssemblyName>
+    <RootNamespace>Zypher.Scripting</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>Zypher engine gameplay scripting runtime (C#).</Description>
+  </PropertyGroup>
+
+  <!--
+    Game assemblies are published with NativeAOT so the engine can load them as
+    plain native libraries (see engine/include/zypher/scripting/ScriptApi.h):
+
+      dotnet publish -c Release -r osx-arm64  -p:PublishAot=true -p:NativeLib=Shared
+      dotnet publish -c Release -r win-x64     -p:PublishAot=true -p:NativeLib=Shared
+  -->
+
+</Project>

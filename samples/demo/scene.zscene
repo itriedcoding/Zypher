@@ -1,0 +1,63 @@
+{
+  "name": "Zypher Demo - Falling Boxes",
+  "environment": {
+    "clearColor": [0.05, 0.06, 0.09, 1.0],
+    "light": {
+      "direction": [-0.4, -1.0, -0.55],
+      "color": [1.0, 0.97, 0.92],
+      "intensity": 1.25
+    }
+  },
+  "camera": {
+    "position": [6.5, 3.6, 8.5],
+    "target": [0.0, 1.2, 0.0],
+    "fov": 52,
+    "near": 0.1,
+    "far": 200
+  },
+  "entities": [
+    {
+      "name": "Ground",
+      "mesh": "models/plane.obj",
+      "transform": { "position": [0, 0, 0], "scale": [12, 1, 12] },
+      "material": { "baseColor": [0.28, 0.30, 0.34, 1.0], "roughness": 0.95 },
+      "rigidbody": { "static": true, "halfExtents": [12, 0.05, 12] }
+    },
+    {
+      "name": "Box A",
+      "mesh": "models/cube.obj",
+      "transform": { "position": [-1.6, 3.0, 0.0], "rotation": [0, 12, 0] },
+      "material": { "baseColor": [0.90, 0.35, 0.28, 1.0], "roughness": 0.4 },
+      "rigidbody": { "mass": 1.0, "restitution": 0.25, "halfExtents": [0.5, 0.5, 0.5] }
+    },
+    {
+      "name": "Box B",
+      "mesh": "models/cube.obj",
+      "transform": { "position": [0.0, 5.0, 0.4], "rotation": [0, 35, 0] },
+      "material": { "baseColor": [0.30, 0.62, 0.92, 1.0], "roughness": 0.55 },
+      "rigidbody": { "mass": 1.0, "restitution": 0.35, "halfExtents": [0.5, 0.5, 0.5] }
+    },
+    {
+      "name": "Box C",
+      "mesh": "models/cube.obj",
+      "transform": { "position": [1.7, 7.0, -0.3], "rotation": [0, -20, 0] },
+      "material": { "baseColor": [0.42, 0.85, 0.55, 1.0], "roughness": 0.6 },
+      "rigidbody": { "mass": 1.5, "restitution": 0.2, "halfExtents": [0.5, 0.5, 0.5] }
+    },
+    {
+      "name": "Pillar",
+      "mesh": "models/cube.obj",
+      "transform": { "position": [3.2, 1.0, 1.6], "scale": [0.6, 2.0, 0.6] },
+      "material": { "baseColor": [0.85, 0.78, 0.45, 1.0], "roughness": 0.7 },
+      "rigidbody": { "static": true, "halfExtents": [0.6, 2.0, 0.6] }
+    },
+    {
+      "name": "Player",
+      "mesh": "models/cube.obj",
+      "transform": { "position": [-3.5, 0.5, 2.8], "scale": [0.9, 1.8, 0.9] },
+      "material": { "baseColor": [0.95, 0.86, 0.30, 1.0], "roughness": 0.5 },
+      "rigidbody": { "mass": 2.0, "halfExtents": [0.45, 0.9, 0.45] },
+      "script": "PlayerController"
+    }
+  ]
+}

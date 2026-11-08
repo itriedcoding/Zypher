@@ -1,0 +1,42 @@
+# Build output
+build/
+build-*/
+out/
+dist/
+install/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+.DS_Store
+
+# Runtime artefacts
+*.zpkg
+*.zpkg.json
+artifacts/
+
+# Rust
+target/
+**/target/
+
+# Node / TypeScript
+node_modules/
+*.tsbuildinfo
+editor/ts/dist/
+
+# .NET
+bin/
+obj/
+*.user
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+.zed/
