@@ -25,21 +25,23 @@ C++23 engine core   Rust asset cooker   C# gameplay (NativeAOT)
 | Windows 10/11 x64 | [zypher-0.1.1-windows-x64.exe](https://github.com/itriedcoding/Zypher/releases/latest/download/zypher-0.1.1-windows-x64.exe) |
 | macOS (Apple silicon and Intel) | [zypher-0.1.1-macos-universal.dmg](https://github.com/itriedcoding/Zypher/releases/latest/download/zypher-0.1.1-macos-universal.dmg) |
 
-The Windows download is an installer: run it, and when it finishes it opens the
-**Zypher** console, which renders the demo scene, prints the report, keeps the
-window open and writes `frame.png` + `report.json` under
-`%LOCALAPPDATA%\Zypher\artifacts`. The Start Menu shortcut opens the same
-launcher; use `Zypher.cmd --help` for the runtime options.
+Both downloads ship the **Zypher Editor**, a Qt 6/QML desktop application. Run the
+installer (or open the disk image) and the editor starts with the bundled demo
+project already loaded: scene hierarchy, inspector, asset browser and console are
+ready, with `File > Open Project` for your own project.
 
-The macOS disk image contains `Zypher.command` — open the image and double-click
-it. Terminal stays open after the demo renders (`~/Zypher/artifacts`), and an
-`Applications` shortcut is included so the files can be dragged into place.
+- **Windows**: the installer adds **Zypher Editor** to the Start Menu (and
+  optionally the desktop) plus an uninstaller. It is a GUI application, so no
+  terminal window appears; `Zypher.cmd` opens the same editor.
+- **macOS**: drag `Zypher Editor.app` into `Applications`, or double-click it in
+  the disk image. `Zypher.command` opens the editor too.
 
-Portable `.zip` builds and `.sha256` checksums for every download are on the
+The command line runtime (`zypher_runtime`) is included in both downloads and in
+the portable `.zip` builds; `.sha256` checksums for every download are on the
 [releases page](https://github.com/itriedcoding/Zypher/releases). Details in
 [docs/releases.md](docs/releases.md).
 
-## Status — 0.1.1 "Foundations"
+## Status — 0.1.2 "Foundations"
 
 This milestone ships a complete, tested core and toolchain. It is not yet a
 drop-in Unity replacement; GPU backends and third-party integrations are the
@@ -60,9 +62,9 @@ next milestone and are listed honestly in [docs/roadmap.md](docs/roadmap.md).
 | Runtime | `zypher_runtime` CLI: scene + pack loading, frame loop, frame dump, checksum report |
 | Asset cooker | Rust (`tools/assetcooker`): project manifests, OBJ/glTF/GLB, textures, audio, mesh blobs, `.zpkg` packing |
 | Editor core | Project/session model with selection, transform edits, rename/add/remove, reorder, undo/redo, save |
-| Editor UI | QML panels (hierarchy, inspector, asset browser, console) and their TypeScript logic + tests |
+| Editor UI | Qt 6/QML desktop application (hierarchy, inspector, asset browser, console), shipped in the installer and disk image, with TypeScript panel logic + tests |
 | Tooling | Python asset validation, reproducible release packaging, one-command verification |
-| Packaging | Inno Setup installer for Windows, disk image with launcher for macOS, portable zips, checksums |
+| Packaging | Inno Setup installer for Windows, macOS disk image with `Zypher Editor.app`, portable zips, checksums |
 | CI | Linux headless core tests, Rust, TypeScript, C#, macOS and Windows builds; tag releases |
 
 **Not wired up yet** (options fail fast instead of silently doing nothing):
@@ -112,8 +114,9 @@ python3 tools/scripts/run_checks.py
 
 ## Editor
 
-The editor core builds without Qt and is covered by tests. The Qt 6/QML desktop
-shell builds when Qt 6.5+ is available:
+The releases ship the Qt 6/QML desktop editor. The editor core also builds
+without Qt (and is covered by tests), so the shell only builds when Qt 6.5+ is
+available:
 
 ```bash
 cmake -S . -B build-editor -DZYPHER_BUILD_EDITOR=ON -DQt6_DIR=/path/to/Qt/6.8.0/macos/lib/cmake/Qt6

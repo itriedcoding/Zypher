@@ -1,10 +1,11 @@
 ; Zypher Windows installer (Inno Setup 6.3+).
 ;
 ; Build with:
-;   ISCC.exe /DMyVersion=0.1.1 /DStageDir=C:\path\to\stage /DOutputDir=C:\path\to\dist zypher.iss
+;   ISCC.exe /DMyVersion=0.1.2 /DStageDir=C:\path\to\stage /DOutputDir=C:\path\to\dist zypher.iss
 ;
-; The staged tree (bin/zypher_runtime.exe, lib/*.lib, include/, share/zypher/)
-; is installed verbatim; Zypher.cmd at its root is the double-click entry point.
+; The staged tree (bin/zypher_editor.exe with its deployed Qt runtime,
+; bin/zypher_runtime.exe, lib/*.lib, include/, share/zypher/) is installed
+; verbatim. Zypher.cmd at its root also opens the editor.
 
 #ifndef MyVersion
   #define MyVersion "0.0.0"
@@ -40,7 +41,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 UninstallDisplayName=Zypher {#MyVersion}
-UninstallDisplayIcon={app}\bin\zypher_runtime.exe
+UninstallDisplayIcon={app}\bin\zypher_editor.exe
 ; Install for the current user by default (no UAC prompt); the wizard offers an
 ; all-users install for administrators.
 PrivilegesRequired=lowest
@@ -56,13 +57,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Zypher"; Filename: "{app}\Zypher.cmd"; WorkingDir: "{app}"; Comment: "Render the Zypher demo scene"
-Name: "{group}\Zypher console"; Filename: "{app}\bin\zypher_runtime.exe"; Parameters: "--help"; WorkingDir: "{app}"; Comment: "List the runtime options"
+Name: "{group}\Zypher Editor"; Filename: "{app}\bin\zypher_editor.exe"; WorkingDir: "{app}"; Comment: "Open the Zypher editor"
+Name: "{group}\Zypher console"; Filename: "{app}\bin\zypher_runtime.exe"; Parameters: "--help"; WorkingDir: "{app}"; Comment: "Runtime command line options"
 Name: "{group}\{cm:UninstallProgram,Zypher}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Zypher"; Filename: "{app}\Zypher.cmd"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\Zypher Editor"; Filename: "{app}\bin\zypher_editor.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Zypher.cmd"; Description: "Launch Zypher"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "{app}\bin\zypher_editor.exe"; Description: "Launch Zypher Editor"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

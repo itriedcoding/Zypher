@@ -1,57 +1,63 @@
 # Releases
 
 Zypher publishes a **Windows installer** and a **macOS disk image** on the
-GitHub Releases page. Builds are produced by `.github/workflows/release.yml`
-when a version tag (`v*`) is pushed, or manually through `workflow_dispatch`.
+GitHub Releases page. Both contain the **Zypher Editor**, a Qt 6/QML desktop
+application, so starting Zypher opens a window rather than a terminal. Builds
+are produced by `.github/workflows/release.yml` when a version tag (`v*`) is
+pushed, or manually through `workflow_dispatch`.
 
 ## Downloads
 
 | File | Platform | What it is |
 | --- | --- | --- |
-| `zypher-<version>-windows-x64.exe` | Windows 10/11 x64 | Inno Setup installer: installs Zypher, adds **Zypher** to the Start Menu (and optionally the desktop), registers an uninstaller and offers to launch it |
-| `zypher-<version>-macos-universal.dmg` | macOS (arm64 + x86_64) | disk image with `Zypher.command` (double-click to run) and an `Applications` shortcut for dragging it into place |
-| `zypher-<version>-windows-x64.zip` | Windows x64 | portable archive, no install (run `Zypher.cmd` inside) |
-| `zypher-<version>-macos-universal.zip` | macOS (arm64 + x86_64) | portable archive, no install (run `Zypher.command` inside) |
+| `zypher-<version>-windows-x64.exe` | Windows 10/11 x64 | Inno Setup installer: installs the editor with its Qt runtime, adds **Zypher Editor** to the Start Menu (and optionally the desktop), registers an uninstaller and offers to launch the editor |
+| `zypher-<version>-macos-universal.dmg` | macOS (arm64 + x86_64) | disk image containing `Zypher Editor.app`, the command line runtime, `Zypher.command` and an `Applications` shortcut |
+| `zypher-<version>-windows-x64.zip` | Windows x64 | portable archive with the editor, no install |
+| `zypher-<version>-macos-universal.zip` | macOS (arm64 + x86_64) | portable command line payload (the `.app` bundle is in the disk image) |
 | `*.sha256` | all | checksum for each download |
 
-Every download contains the `zypher_runtime` binary, the engine library, the
-public headers, shader sources, the cooked demo project and the documentation.
+Every download also contains the `zypher_runtime` command line tool, the engine
+library, the public headers, shader sources, the cooked demo project and the
+documentation. The editor needs no separate runtime: Qt is deployed next to it
+(`windeployqt` on Windows, inside the bundle with `macdeployqt` on macOS).
 
-## Running Zypher
+## Starting Zypher
 
 **Windows.** Run `zypher-<version>-windows-x64.exe`. The wizard installs to
 `%LOCALAPPDATA%\Programs\Zypher` for the current user without an administrator
 prompt (it offers an all-users install if you are an administrator) and, when
-"Launch Zypher" is left checked, opens the **Zypher** console. That console
-renders the demo scene, prints the report and stays open so you can read it,
-writing `frame.png` and `report.json` to `%LOCALAPPDATA%\Zypher\artifacts`.
-The Start Menu shortcut runs the same launcher; to pass runtime options directly
-use `Zypher.cmd --help`.
+"Launch Zypher Editor" is left checked, opens the editor. The editor loads the
+bundled demo project, so the hierarchy, inspector, asset browser and console are
+ready to use. The Start Menu and desktop shortcuts open the same window; no
+console appears because `zypher_editor.exe` is a GUI subsystem executable.
 
-**macOS.** Open the disk image and double-click `Zypher.command`. Terminal opens,
-renders the demo, prints the report and waits for Return before closing; frames
-and the report go to `~/Zypher/artifacts`. Drag `Zypher.command` (or the whole
-volume contents) into `Applications` to keep it. macOS may warn that the build is
-not signed: right-click the file, choose **Open**, then confirm.
+**macOS.** Open the disk image and double-click `Zypher Editor.app` (or drag it
+into `Applications` first). `Zypher.command`, included for scripted use, opens
+the editor when run without arguments. macOS may report that the build is not
+signed: right-click the app, choose **Open**, then confirm.
 
-**Portable archives.** Unzip and run `Zypher.cmd` (Windows) or `Zypher.command`
-(macOS). Nothing is registered with the system.
+**Command line.** The runtime is still there for automation:
 
-> Releases before 0.1.1 shipped a 7-Zip self-extracting archive named `.exe`. It
-> only unpacked to a temporary folder and exited, so it looked like a console
-> window opening and closing. Use 0.1.1 or newer for the real installer.
+```bash
+zypher_runtime --scene <scene> --pack <pack> --output <dir> --dump-frame
+```
+
+> Releases before 0.1.1 shipped a 7-Zip self-extracting archive named `.exe`,
+> which only unpacked to a temporary folder, and releases before 0.1.2 shipped
+> the runtime without the editor, so opening the download showed a console
+> window. Use 0.1.2 or newer.
 
 ## Verifying a download
 
 ```bash
 # macOS or Linux
-shasum -a 256 -c zypher-0.1.1-macos-universal.dmg.sha256
+shasum -a 256 -c zypher-0.1.2-macos-universal.dmg.sha256
 ```
 
 ```powershell
 # Windows
-Get-FileHash .\zypher-0.1.1-windows-x64.exe -Algorithm SHA256
-# compare with the value in zypher-0.1.1-windows-x64.exe.sha256
+Get-FileHash .\zypher-0.1.2-windows-x64.exe -Algorithm SHA256
+# compare with the value in zypher-0.1.2-windows-x64.exe.sha256
 ```
 
 ## Publishing automatically
@@ -67,30 +73,33 @@ You can also run **Release** manually from the Actions tab with a tag input, or
 push a tag:
 
 ```bash
-./tools/scripts/release.sh 0.1.2   # bumps nothing, creates and pushes the tag
+./tools/scripts/release.sh 0.1.3   # bumps nothing, creates and pushes the tag
 ```
 
 ## What the release job does
 
 1. Checks out the tag and verifies the tag matches `project(Zypher VERSION ...)`.
-2. Installs Rust (cooker) and configures CMake:
+2. Installs Rust (cooker) and Qt 6.8 (aqtinstall, cached between runs), then
+   configures CMake:
    - macOS: `-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"`
    - Windows: Visual Studio x64
-3. Builds the engine, runtime, editor core and tests.
+3. Builds the engine, runtime, editor shell and tests.
 4. Cooks `samples/demo` and runs `ctest` (including the runtime-with-pack test).
-5. Stages the artifacts explicitly and **asserts** the runtime and engine library
-   are present, then packages them:
-   - macOS: `package_release.py` zip, then a `.dmg` built with `hdiutil` that
-     contains `Zypher.command` and an `Applications` shortcut
-   - Windows: `package_release.py` zip, then an Inno Setup installer
+5. Stages the artifacts explicitly and **asserts** the runtime, engine library
+   and editor are present, then packages them:
+   - macOS: `package_release.py` zip, `macdeployqt` on the editor app, then a
+     `.dmg` built with `hdiutil` that holds `Zypher Editor.app`, `Zypher.command`
+     and an `Applications` shortcut
+   - Windows: `windeployqt` beside `zypher_editor.exe`, `package_release.py` zip,
+     then an Inno Setup installer
    - SHA-256 sums are written for every download
 6. Verifies the packaged artifacts before anything is uploaded:
-   - the `.dmg` is mounted, its launcher is checked, and `Zypher.command
-     --version` is run from the mounted volume
-   - the installer is run with `/VERYSILENT` into a scratch directory, the
-     installed `bin\zypher_runtime.exe` and `Zypher.cmd` are executed, the demo
-     is rendered from the installed copy, and the uninstaller is run to confirm
-     it removes what it installed
+   - the `.dmg` is mounted; the launcher is run, and the editor under
+     `Zypher Editor.app` is started (offscreen) and must stay running
+   - the installer is run with `/VERYSILENT` into a scratch directory; the
+     installed runtime, `Zypher.cmd`, PE subsystem (GUI, so no console) and the
+     editor's startup are checked, the demo is rendered from the installed copy,
+     and the uninstaller is run to confirm it removes what it installed
 7. Creates or updates the GitHub Release, uploading all downloads and refreshing
    the notes from this file.
 
@@ -106,20 +115,30 @@ mkdir -p stage/share/zypher && cp -R samples docs README.md LICENSE stage/share/
 cp tools/installer/macos/Zypher.command stage/     # macOS launcher
 cp tools/installer/windows/Zypher.cmd stage/       # Windows launcher
 
-python3 tools/scripts/package_release.py --version 0.1.1 \
+python3 tools/scripts/package_release.py --version 0.1.2 \
         --platform macos-universal --input stage --output dist
 
-# macOS disk image
+# macOS disk image (editor app included)
+cp -R build/bin/zypher_editor.app "stage/Zypher Editor.app"
+"$QT_DIR/bin/macdeployqt" "stage/Zypher Editor.app" -always-overwrite -no-translations -qmldir=editor/qml
 cp -R stage /tmp/dmg-src && ln -s /Applications /tmp/dmg-src/Applications
-hdiutil create -volname "Zypher 0.1.1" -srcfolder /tmp/dmg-src -ov -format UDZO \
-        dist/zypher-0.1.1-macos-universal.dmg
+hdiutil create -volname "Zypher 0.1.2" -srcfolder /tmp/dmg-src -ov -format UDZO \
+        dist/zypher-0.1.2-macos-universal.dmg
 
 # Windows installer (Inno Setup 6)
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyVersion=0.1.1 ^
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyVersion=0.1.2 ^
         /DStageDir=stage /DOutputDir=dist tools\installer\zypher.iss
 ```
 
 The installer definition lives in [`tools/installer/zypher.iss`](../tools/installer/zypher.iss).
+
+## Licensing
+
+Zypher is MIT licensed. The Windows and macOS builds bundle Qt 6 under the
+LGPLv3: the Qt libraries ship as separate, dynamically linked files next to
+`zypher_editor.exe` (and as frameworks inside the macOS bundle), so they can be
+replaced with a compatible build. Qt's licence text is available at
+<https://www.qt.io/licensing/open-source-lgpl-obligations>.
 
 ## Versioning
 

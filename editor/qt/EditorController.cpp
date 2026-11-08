@@ -3,13 +3,62 @@
 #include "zypher/core/FileSystem.h"
 #include "zypher/json/Json.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 
+namespace {
+
+// Project locations searched on startup, relative to the executable: the
+// installed layout (bin/zypher_editor next to share/), the macOS .app bundle
+// (Contents/MacOS/../Resources), and a source checkout for development builds.
+[[nodiscard]] QStringList demoProjectCandidates() {
+    const QString exeDir = QCoreApplication::applicationDirPath();
+    return {
+        exeDir + QStringLiteral("/share/zypher/samples/demo/zypher.project.json"),
+        exeDir + QStringLiteral("/../share/zypher/samples/demo/zypher.project.json"),
+        exeDir + QStringLiteral("/../Resources/share/zypher/samples/demo/zypher.project.json"),
+        exeDir + QStringLiteral("/../../../Resources/share/zypher/samples/demo/zypher.project.json"),
+        QDir::currentPath() + QStringLiteral("/samples/demo/zypher.project.json"),
+    };
+}
+
+} // namespace
+
 EditorController::EditorController(QObject* parent) : QObject(parent) {}
 
+QString EditorController::bundledDemoProject() const {
+    for (const QString& candidate : demoProjectCandidates()) {
+        const QFileInfo info(candidate);
+        if (info.exists() && info.isFile()) {
+            return info.canonicalFilePath();
+        }
+    }
+    return {};
+}
+
+bool EditorController::demoAvailable() const { return !bundledDemoProject().isEmpty(); }
+
 void EditorController::startup() {
-    publish("Zypher editor ready. Open a project (File > Open Project).");
+    publish(tr("Zypher editor ready."));
+
+    const QString project =
+        !m_initialProject.isEmpty() && QFileInfo::exists(m_initialProject) ? m_initialProject : bundledDemoProject();
+    if (project.isEmpty()) {
+        publish(tr("No project open. Use File > Open Project (Ctrl+O) to start."));
+        return;
+    }
+    openProject(project);
+}
+
+void EditorController::openDemoProject() {
+    const QString project = bundledDemoProject();
+    if (project.isEmpty()) {
+        publish(tr("No demo project was found next to the editor."));
+        return;
+    }
+    openProject(project);
 }
 
 void EditorController::openProjectDialog() {

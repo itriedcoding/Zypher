@@ -29,13 +29,18 @@ class EditorController : public QObject {
     Q_PROPERTY(QString selectedName READ selectedName NOTIFY changed)
     Q_PROPERTY(QString selectedMesh READ selectedMesh NOTIFY changed)
     Q_PROPERTY(QString selectedScript READ selectedScript NOTIFY changed)
+    Q_PROPERTY(bool demoAvailable READ demoAvailable NOTIFY changed)
 
 public:
     explicit EditorController(QObject* parent = nullptr);
 
+    // Set from the command line before the QML shell loads.
+    void setInitialProject(const QString& path) { m_initialProject = path; }
+
     Q_INVOKABLE void startup();
     Q_INVOKABLE void openProjectDialog();
     Q_INVOKABLE bool openProject(const QString& path);
+    Q_INVOKABLE void openDemoProject();
     Q_INVOKABLE void saveScene();
     Q_INVOKABLE void select(int index);
     Q_INVOKABLE void addEntity(const QString& name, const QString& meshPath);
@@ -65,6 +70,7 @@ public:
     QString selectedName() const;
     QString selectedMesh() const;
     QString selectedScript() const;
+    bool demoAvailable() const;
 
 signals:
     void changed();
@@ -73,8 +79,10 @@ signals:
 private:
     void publish(const QString& message = QString());
     void loadAssets();
+    [[nodiscard]] QString bundledDemoProject() const;
 
     zy::editor::EditorSession m_session;
     QStringList m_assetPaths;
     QString m_status;
+    QString m_initialProject;
 };

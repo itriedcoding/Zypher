@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(Zypher
-    VERSION 0.1.1
+    VERSION 0.1.2
     DESCRIPTION "Zypher - an open source game engine for macOS and Windows"
     HOMEPAGE_URL "https://github.com/itriedcoding/Zypher"
     LANGUAGES CXX)

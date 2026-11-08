@@ -13,6 +13,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  QT_VERSION: "6.8.3"
+
 jobs:
   engine-linux:
     name: Engine (Linux, headless)
@@ -125,9 +128,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/Qt
+          key: qt-${{ env.QT_VERSION }}-macos-clang_64
+      - name: Install Qt
+        run: |
+          qt_dir="$RUNNER_TEMP/Qt/$QT_VERSION/macos"
+          if [ ! -f "$qt_dir/lib/cmake/Qt6/Qt6Config.cmake" ]; then
+            python3 -m venv "$RUNNER_TEMP/aqt"
+            "$RUNNER_TEMP/aqt/bin/pip" install --quiet --upgrade aqtinstall
+            "$RUNNER_TEMP/aqt/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 --outputdir "$RUNNER_TEMP/Qt"
+          fi
+          test -f "$qt_dir/lib/cmake/Qt6/Qt6Config.cmake"
+          echo "QT_DIR=$qt_dir" >> "$GITHUB_ENV"
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_PREFIX_PATH="$QT_DIR"
           -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
       - name: Build
         run: |
@@ -160,7 +178,7 @@ jobs:
             done
             exit "$status"
           fi
-      - name: Package smoke test (dmg)
+      - name: Package smoke test (dmg with editor)
         run: |
           set -o pipefail
           src="$RUNNER_TEMP/dmg-src"
@@ -169,6 +187,20 @@ jobs:
           cp tools/installer/macos/Zypher.command "$src/"
           chmod 755 "$src/Zypher.command"
           ln -s /Applications "$src/Applications"
+
+          editor_app=$(find build -type d -name 'zypher_editor.app' -print -quit)
+          test -n "$editor_app"
+          "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite -no-translations \
+              "-qmldir=$GITHUB_WORKSPACE/editor/qml" > /dev/null
+          cp -R "$editor_app" "$src/Zypher Editor.app"
+          app_platforms="$src/Zypher Editor.app/Contents/PlugIns/platforms"
+          mkdir -p "$app_platforms"
+          for plugin in libqoffscreen.dylib libqminimal.dylib; do
+            if [ ! -f "$app_platforms/$plugin" ] && [ -f "$QT_DIR/plugins/platforms/$plugin" ]; then
+              cp "$QT_DIR/plugins/platforms/$plugin" "$app_platforms/"
+            fi
+          done
+
           dmg="$RUNNER_TEMP/zypher-smoke.dmg"
           rm -f "$dmg"
           hdiutil create -volname ZypherSmoke -srcfolder "$src" -ov -format UDZO "$dmg" > /dev/null
@@ -178,9 +210,25 @@ jobs:
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" > /dev/null
           test -x "$mount_point/Zypher.command"
           test -L "$mount_point/Applications"
+          test -d "$mount_point/Zypher Editor.app"
           "$mount_point/Zypher.command" --version
+
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+            "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" > "$RUNNER_TEMP/editor.log" 2>&1 &
+          editor_pid=$!
+          sleep 8
+          if ! kill -0 "$editor_pid" 2>/dev/null; then
+            echo "::error::the editor exited during startup"
+            tail -n 30 "$RUNNER_TEMP/editor.log" | tr -d '\r' | while IFS= read -r line; do
+              echo "::error::${line:0:900}"
+            done
+            hdiutil detach "$mount_point" > /dev/null || true
+            exit 1
+          fi
+          kill "$editor_pid" 2>/dev/null || true
+          wait "$editor_pid" 2>/dev/null || true
           hdiutil detach "$mount_point" > /dev/null
-          echo "disk image mounts and its launcher runs"
+          echo "disk image mounts and its editor starts"
 
   windows:
     name: Windows build + tests
@@ -188,8 +236,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\Qt
+          key: qt-${{ env.QT_VERSION }}-windows-msvc2022_64
+      - name: Install Qt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $qtDir = Join-Path $env:RUNNER_TEMP "Qt/$env:QT_VERSION/msvc2022_64"
+          if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) {
+            $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
+            python -m pip install --upgrade --quiet aqtinstall
+            python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 --outputdir (Join-Path $env:RUNNER_TEMP 'Qt') --external 7z
+          }
+          if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) { throw "Qt was not installed at $qtDir" }
+          "QT_DIR=$qtDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Configure
-        run: cmake -S . -B build -A x64 -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
+        run: cmake -S . -B build -A x64 -DCMAKE_PREFIX_PATH="$env:QT_DIR" -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
       - name: Build
         shell: pwsh
         run: |
@@ -208,7 +272,7 @@ jobs:
         run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
       - name: Test
         run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
-      - name: Package smoke test (exe installer)
+      - name: Package smoke test (exe installer with editor)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -216,9 +280,26 @@ jobs:
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Force -Path (Join-Path $stage 'bin') | Out-Null
           $runtime = Get-ChildItem -Path build -Recurse -Filter 'zypher_runtime.exe' -File | Select-Object -First 1
+          $editor = Get-ChildItem -Path build -Recurse -Filter 'zypher_editor.exe' -File | Select-Object -First 1
           if (-not $runtime) { throw 'zypher_runtime.exe was not built' }
+          if (-not $editor) { throw 'zypher_editor.exe was not built' }
           Copy-Item $runtime.FullName (Join-Path $stage 'bin/zypher_runtime.exe')
+          Copy-Item $editor.FullName (Join-Path $stage 'bin/zypher_editor.exe')
           Copy-Item tools/installer/windows/Zypher.cmd $stage
+
+          $windeployqt = Join-Path $env:QT_DIR 'bin/windeployqt.exe'
+          & $windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw `
+            --qmldir (Join-Path $env:GITHUB_WORKSPACE 'editor/qml') (Join-Path $stage 'bin/zypher_editor.exe') | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with $LASTEXITCODE" }
+          $offscreen = Join-Path $env:QT_DIR 'plugins/platforms/qoffscreen.dll'
+          $platformDir = Join-Path $stage 'bin/platforms'
+          if ((Test-Path $offscreen) -and -not (Test-Path (Join-Path $platformDir 'qoffscreen.dll'))) {
+            New-Item -ItemType Directory -Force -Path $platformDir | Out-Null
+            Copy-Item $offscreen $platformDir
+          }
+          $subsystem = python tools/scripts/pe_subsystem.py (Join-Path $stage 'bin/zypher_editor.exe')
+          if ([int]$subsystem -ne 2) { throw "zypher_editor.exe uses the console subsystem ($subsystem)" }
+
           $dist = Join-Path $env:RUNNER_TEMP 'installer-dist'
           if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
@@ -248,16 +329,32 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "the installer exited with $($install.ExitCode)" }
 
           $installedRuntime = Join-Path $probe 'bin/zypher_runtime.exe'
+          $installedEditor = Join-Path $probe 'bin/zypher_editor.exe'
           $installedLauncher = Join-Path $probe 'Zypher.cmd'
-          if (-not (Test-Path $installedRuntime)) { throw 'the installer did not lay down bin\zypher_runtime.exe' }
-          if (-not (Test-Path $installedLauncher)) { throw 'the installer did not lay down Zypher.cmd' }
+          foreach ($required in @($installedRuntime, $installedEditor, $installedLauncher)) {
+            if (-not (Test-Path $required)) { throw "the installer did not lay down $required" }
+          }
           $reported = cmd /c "`"$installedLauncher`" --version"
           Write-Host "installed launcher reported: $reported"
           if ($reported -notmatch 'Zypher') { throw 'the installed launcher did not reach the runtime' }
+
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $env:QT_QUICK_BACKEND = 'software'
+          $editorProcess = Start-Process -FilePath $installedEditor -PassThru `
+            -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'editor-out.log') `
+            -RedirectStandardError (Join-Path $env:RUNNER_TEMP 'editor-err.log')
+          Start-Sleep -Seconds 10
+          if ($editorProcess.HasExited) {
+            foreach ($log in @((Join-Path $env:RUNNER_TEMP 'editor-out.log'), (Join-Path $env:RUNNER_TEMP 'editor-err.log'))) {
+              if (Test-Path $log) { Get-Content $log | Select-Object -Last 30 | ForEach-Object { Write-Host "::error::$_" } }
+            }
+            throw 'the installed editor did not stay running'
+          }
+          Stop-Process -Id $editorProcess.Id -Force
 
           $uninstaller = Join-Path $probe 'unins000.exe'
           if (Test-Path $uninstaller) {
             $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
             if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
           }
-          Write-Host "installer works: $((Get-Item $installer).Length) bytes, silent install and uninstall verified"
+          Write-Host "installer works: $((Get-Item $installer).Length) bytes; editor starts, uninstall verified"

@@ -1,19 +1,30 @@
 @echo off
-rem Zypher launcher. Double-click to render the demo and read the report, or
-rem pass runtime options, for example:  Zypher.cmd --help
+rem Zypher launcher. Double-click to open the editor, or pass runtime options to
+rem the command line runtime, for example:  Zypher.cmd --help
 setlocal EnableExtensions EnableDelayedExpansion
 title Zypher
 
 set "APP=%~dp0"
+set "EDITOR=%APP%bin\zypher_editor.exe"
 set "RUNTIME=%APP%bin\zypher_runtime.exe"
-if not exist "%RUNTIME%" goto :missing
 
-if not "%~1"=="" (
-    "%RUNTIME%" %*
-    set "STATUS=!errorlevel!"
+if not "%~1"=="" goto :runtime
+
+if exist "%EDITOR%" (
+    start "" "%EDITOR%"
     goto :done
 )
+if not exist "%RUNTIME%" goto :missing
+echo The editor is not part of this build; renderering the demo instead.
+goto :demo
 
+:runtime
+if not exist "%RUNTIME%" goto :missing
+"%RUNTIME%" %*
+set "STATUS=!errorlevel!"
+goto :done
+
+:demo
 set "OUT=%LOCALAPPDATA%\Zypher\artifacts"
 if "%LOCALAPPDATA%"=="" set "OUT=%APP%artifacts"
 set "SCENE=%APP%share\zypher\samples\demo\scene.zscene"
@@ -42,11 +53,6 @@ echo.
 echo   Frame and report written to:
 echo     %OUT%\frame.png
 echo     %OUT%\report.json
-echo.
-echo   Next steps:
-echo     Zypher.cmd --help
-echo     Zypher.cmd --list-assets --pack "%PACK%"
-echo     Zypher.cmd --scene ^<scene^> --pack ^<pack^> --output ^<dir^>
 
 :hold
 echo.
