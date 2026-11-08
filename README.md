@@ -1,5 +1,8 @@
 # Zypher
 
+[![CI](https://github.com/itriedcoding/Zypher/actions/workflows/ci.yml/badge.svg)](https://github.com/itriedcoding/Zypher/actions/workflows/ci.yml)
+[![Release](https://github.com/itriedcoding/Zypher/actions/workflows/release.yml/badge.svg)](https://github.com/itriedcoding/Zypher/releases)
+
 An open source game engine for **macOS and Windows** — a C++23 runtime with C#
 gameplay scripting, Rust asset tooling, and a TypeScript/QML editor.
 
