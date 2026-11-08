@@ -77,7 +77,7 @@ Status ScriptHost::loadModule(const std::string& libraryPath) {
         return Error{ErrorCode::Io, "LoadLibrary failed for '" + libraryPath + "' (error " +
                                         std::to_string(GetLastError()) + ")"};
     }
-    const auto* symbol = GetProcAddress(library, "zypher_script_module");
+    const auto symbol = GetProcAddress(library, "zypher_script_module");
 #else
     void* library = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (library == nullptr) {
@@ -85,7 +85,9 @@ Status ScriptHost::loadModule(const std::string& libraryPath) {
         return Error{ErrorCode::Io, std::string("dlopen failed for '") + libraryPath + "': " +
                                         (message != nullptr ? message : "unknown error")};
     }
-    const auto* symbol = dlsym(library, "zypher_script_module");
+    // dlsym returns void*; keep it non-const because casting a const void* to a
+    // function pointer casts away qualifiers, which clang rejects.
+    void* symbol = dlsym(library, "zypher_script_module");
 #endif
 
     if (symbol == nullptr) {
