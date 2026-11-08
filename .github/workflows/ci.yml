@@ -214,6 +214,17 @@ jobs:
           "$mount_point/Zypher.command" --version
 
           QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+            "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" --check \
+            > "$RUNNER_TEMP/editor-check.log" 2>&1 || {
+              echo "::error::the editor self check failed"
+              tail -n 40 "$RUNNER_TEMP/editor-check.log" | tr -d '\r' | while IFS= read -r line; do
+                echo "::error::${line:0:900}"
+              done
+              hdiutil detach "$mount_point" > /dev/null || true
+              exit 1
+            }
+          cat "$RUNNER_TEMP/editor-check.log"
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
             "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" > "$RUNNER_TEMP/editor.log" 2>&1 &
           editor_pid=$!
           sleep 8
@@ -340,6 +351,14 @@ jobs:
 
           $env:QT_QPA_PLATFORM = 'offscreen'
           $env:QT_QUICK_BACKEND = 'software'
+          $checkLog = Join-Path $env:RUNNER_TEMP 'editor-check.log'
+          & $installedEditor --check *> $checkLog
+          $checkExit = $LASTEXITCODE
+          Get-Content $checkLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+          if ($checkExit -ne 0) {
+            Get-Content $checkLog -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object { Write-Host "::error::$_" }
+            throw "the installed editor self check failed with $checkExit"
+          }
           $editorProcess = Start-Process -FilePath $installedEditor -PassThru `
             -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP 'editor-out.log') `
             -RedirectStandardError (Join-Path $env:RUNNER_TEMP 'editor-err.log')

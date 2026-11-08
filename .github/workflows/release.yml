@@ -135,15 +135,26 @@ jobs:
           import sys
           import zipfile
           members = zipfile.ZipFile(sys.argv[1]).namelist()
-          for required in ("bin/zypher_runtime", "lib/libzypher_engine.a", "Zypher.command"):
-              if not any(name.endswith(required) for name in members):
-                  raise SystemExit(f"packaged archive is missing {required}")
+          missing = [required for required in ("bin/zypher_runtime", "lib/libzypher_engine.a", "Zypher.command")
+                     if not any(name.endswith(required) for name in members)]
+          if missing:
+              print(f"::error::packaged archive is missing {missing}")
+              for name in members[:40]:
+                  print(f"::error::member {name}")
+              raise SystemExit(1)
           print(f"packaged archive verified ({len(members)} files)")
           PY
 
             # Editor app bundle with its Qt frameworks, inside the disk image.
-            "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite -no-translations \
-                "-qmldir=$GITHUB_WORKSPACE/editor/qml" > /dev/null
+            echo "::notice::stage: deploying the Qt runtime into the editor app"
+            if ! "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite -no-translations \
+                "-qmldir=$GITHUB_WORKSPACE/editor/qml" > "$RUNNER_TEMP/macdeployqt.log" 2>&1; then
+              echo "::error::macdeployqt failed"
+              tail -n 40 "$RUNNER_TEMP/macdeployqt.log" | while IFS= read -r line; do
+                echo "::error::${line:0:900}"
+              done
+              return 1
+            fi
             cp -R "$editor_app" "$prefix/Zypher Editor.app"
             mkdir -p "$prefix/Zypher Editor.app/Contents/Resources/share"
             cp -R "$prefix/share/zypher" "$prefix/Zypher Editor.app/Contents/Resources/share/zypher"
@@ -190,6 +201,18 @@ jobs:
                 ;;
             esac
 
+            echo "::notice::stage: starting the packaged editor"
+            QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+              "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" --check \
+              > "$RUNNER_TEMP/editor-check.log" 2>&1 || {
+                echo "::error::the editor self check failed"
+                tail -n 40 "$RUNNER_TEMP/editor-check.log" | tr -d '\r' | while IFS= read -r line; do
+                  echo "::error::${line:0:900}"
+                done
+                hdiutil detach "$mount_point" > /dev/null || true
+                return 1
+              }
+            cat "$RUNNER_TEMP/editor-check.log"
             QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
               "$mount_point/Zypher Editor.app/Contents/MacOS/zypher_editor" > "$RUNNER_TEMP/editor.log" 2>&1 &
             editor_pid=$!
@@ -401,6 +424,14 @@ jobs:
           if ([int]$subsystem -ne 2) { throw "zypher_editor.exe uses the console subsystem ($subsystem)" }
           $env:QT_QPA_PLATFORM = 'offscreen'
           $env:QT_QUICK_BACKEND = 'software'
+          $checkLog = Join-Path $env:RUNNER_TEMP 'editor-check.log'
+          & $installedEditor --check *> $checkLog
+          $checkExit = $LASTEXITCODE
+          Get-Content $checkLog -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+          if ($checkExit -ne 0) {
+            Get-Content $checkLog -ErrorAction SilentlyContinue | Select-Object -Last 40 | ForEach-Object { Write-Host "::error::$_" }
+            throw "the installed editor self check failed with $checkExit"
+          }
           $editorOut = Join-Path $env:RUNNER_TEMP 'editor-out.log'
           $editorErr = Join-Path $env:RUNNER_TEMP 'editor-err.log'
           $editorProcess = Start-Process -FilePath $installedEditor -PassThru `

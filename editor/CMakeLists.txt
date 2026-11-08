@@ -30,17 +30,24 @@ if(ZYPHER_EDITOR_QT)
     # module is declared so qt_add_qml_module can register the controller types.
     set_target_properties(zypher_editor PROPERTIES AUTOMOC ON)
 
-    # The QML files live in the executable's resources, so the shipped app never
-    # depends on the source tree: `engine.loadFromModule` finds them anywhere.
+    # The QML sources live in editor/qml/, but they are registered at the root of
+    # the Zypher.Editor module so `loadFromModule("Zypher.Editor", "Main")` and
+    # the resource URL agree on one path: :/qt/qml/Zypher/Editor/Main.qml
+    set(zypher_editor_qml_files
+        qml/Main.qml
+        qml/SceneHierarchy.qml
+        qml/Inspector.qml
+        qml/AssetBrowser.qml
+        qml/ConsolePanel.qml)
+    foreach(qml_file IN LISTS zypher_editor_qml_files)
+        get_filename_component(qml_name "${qml_file}" NAME)
+        set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
+    endforeach()
+
     qt_add_qml_module(zypher_editor
         URI Zypher.Editor
         VERSION 1.0
-        QML_FILES
-            qml/Main.qml
-            qml/SceneHierarchy.qml
-            qml/Inspector.qml
-            qml/AssetBrowser.qml
-            qml/ConsolePanel.qml)
+        QML_FILES ${zypher_editor_qml_files})
 
     target_link_libraries(zypher_editor PRIVATE
         zypher_editor_core
