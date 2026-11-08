@@ -37,13 +37,14 @@ std::string_view architecture() {
 
 std::string osVersion() {
     // RtlGetVersion reports the real version even when the manifest requests
-    // compatibility mode (unlike the deprecated GetVersion).
-    using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
+    // compatibility mode (unlike the deprecated GetVersion). OSVERSIONINFOW is
+    // declared by windows.h; PRTL_OSVERSIONINFOW would require <winternl.h>.
+    using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll"); ntdll != nullptr) {
         const auto function = reinterpret_cast<RtlGetVersionFn>(
             reinterpret_cast<void*>(GetProcAddress(ntdll, "RtlGetVersion")));
         if (function != nullptr) {
-            RTL_OSVERSIONINFOW information{};
+            OSVERSIONINFOW information{};
             information.dwOSVersionInfoSize = sizeof(information);
             if (function(&information) == 0) {
                 return "Windows " + std::to_string(information.dwMajorVersion) + "." +

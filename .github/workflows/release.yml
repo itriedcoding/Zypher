@@ -16,7 +16,7 @@ permissions:
 jobs:
   macos:
     name: macOS universal
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
@@ -85,7 +85,19 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -A x64 -DZYPHER_BUILD_TESTS=ON -DZYPHER_BUILD_EDITOR=ON
       - name: Build
-        run: cmake --build build --config Release --parallel 2
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Windows release build failed; compiler diagnostics follow"
+            $lines = Select-String -Path build.log -Pattern 'error|fatal error|LNK[0-9]+' | Select-Object -First 20
+            foreach ($line in $lines) {
+              $text = $line.Line.Trim()
+              if ($text.Length -gt 900) { $text = $text.Substring(0, 900) }
+              Write-Host "::error::$text"
+            }
+            exit 1
+          }
       - name: Cook demo pack
         run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
       - name: Test
