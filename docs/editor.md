@@ -16,8 +16,9 @@ starting Zypher opens a window rather than a terminal:
   double-clicking `Zypher.command` with no arguments.
 
 For automation and CI, `zypher_editor --check` loads the QML module headlessly,
-prints the loaded root object count, and exits non-zero if the UI cannot be
-created. Release builds run it against the installed copy before publishing.
+spins the event loop for 1.5 seconds, prints the loaded root object count, and
+exits non-zero if the UI cannot be created. Release builds run it against the
+installed copy before publishing.
 
 On startup the editor opens the bundled demo project
 (`share/zypher/samples/demo/zypher.project.json`, or `Contents/Resources/...`

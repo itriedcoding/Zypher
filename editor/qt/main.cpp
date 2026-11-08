@@ -7,6 +7,8 @@
 #include <QQmlContext>
 #include <QStringList>
 
+#include <QTimer>
+
 #include <cstdio>
 
 namespace {
@@ -90,12 +92,14 @@ int main(int argc, char* argv[]) {
 
     if (checkOnly) {
         // Headless self check: proves the Qt runtime, platform plugin and QML
-        // module all work without opening a window. Used by CI and releases.
+        // module all work, and that the event loop runs, without opening a
+        // window. Used by CI and releases.
         const int objects = static_cast<int>(engine.rootObjects().size());
         std::printf("zypher_editor check ok: %d root object(s), project '%s'\n", objects,
                     controller.projectName().toUtf8().constData());
         std::fflush(stdout);
-        return 0;
+        QTimer::singleShot(1500, &application, [] { QCoreApplication::quit(); });
+        return application.exec();
     }
     return application.exec();
 }
