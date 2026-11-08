@@ -71,16 +71,33 @@ jobs:
         env:
           VERSION_NUMBER: ${{ env.VERSION }}
         run: |
-          version="${VERSION#v}"
-          cmake --install build --prefix stage
-          mkdir -p stage/share/zypher
-          cp -R samples stage/share/zypher/samples
-          cp -R engine/shaders stage/share/zypher/shaders
-          cp -R docs stage/share/zypher/docs
-          cp README.md LICENSE stage/share/zypher/
-          python3 tools/scripts/package_release.py \
-              --version "$version" --platform macos-universal \
-              --input stage --output dist
+          # GitHub runs steps with bash -e; trace and capture so a failure here is
+          # visible as annotations (job logs are not readable without admin rights).
+          set +e
+          set -o pipefail
+          run_stage() {
+            version="${VERSION#v}"
+            cmake --install build --prefix stage
+            mkdir -p stage/share/zypher
+            cp -R samples stage/share/zypher/samples
+            cp -R engine/shaders stage/share/zypher/shaders
+            cp -R docs stage/share/zypher/docs
+            cp README.md LICENSE stage/share/zypher/
+            python3 tools/scripts/package_release.py \
+                --version "$version" --platform macos-universal \
+                --input stage --output dist
+          }
+          set -x
+          run_stage 2>&1 | tee stage.log
+          status=${PIPESTATUS[0]}
+          set +x
+          if [ "$status" -ne 0 ]; then
+            echo "::error::macOS staging failed; trace follows"
+            tail -n 30 stage.log | tr -d '\r' | while IFS= read -r line; do
+              echo "::error::${line:0:900}"
+            done
+            exit "$status"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: macos-dist
