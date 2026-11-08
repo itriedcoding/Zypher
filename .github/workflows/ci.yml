@@ -263,12 +263,13 @@ jobs:
           $qtDir = Join-Path $env:RUNNER_TEMP "Qt/$env:QT_VERSION/msvc2022_64"
           if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) {
             $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
+            $qtLog = Join-Path $env:RUNNER_TEMP 'qt-install.log'
             python -m pip install --upgrade --quiet aqtinstall
             for ($attempt = 1; $attempt -le 3; $attempt++) {
-              python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 --outputdir (Join-Path $env:RUNNER_TEMP 'Qt') --external 7z
+              python -m aqt install-qt windows desktop $env:QT_VERSION win64_msvc2022_64 --outputdir (Join-Path $env:RUNNER_TEMP 'Qt') --external 7z *> $qtLog
               if (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake')) { break }
-              Write-Host "::warning::aqt install attempt $attempt did not produce Qt; retrying"
-              Start-Sleep -Seconds 15
+              Get-Content $qtLog -ErrorAction SilentlyContinue | Select-Object -Last 30 | ForEach-Object { Write-Host "::error::aqt($_): $_" }
+              Start-Sleep -Seconds 10
             }
           }
           if (-not (Test-Path (Join-Path $qtDir 'lib/cmake/Qt6/Qt6Config.cmake'))) { throw "Qt was not installed at $qtDir" }
