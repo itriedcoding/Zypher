@@ -39,14 +39,43 @@ jobs:
         run: |
           macos_asset="zypher-${VERSION}-macos-universal.zip"
           windows_asset="zypher-${VERSION}-windows-x64.zip"
+
+          # A release can exist with a partial archive (the staging step once
+          # shipped a macOS archive without the runtime), so verify the contents
+          # before deciding the release is complete.
+          archive_has_runtime() {
+            asset="$1"
+            member="$2"
+            tmp=$(mktemp -d)
+            if ! curl -sSL --fail -o "$tmp/asset.zip" \
+                 "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${asset}"; then
+              rm -rf "$tmp"
+              return 1
+            fi
+            python3 - "$tmp/asset.zip" "$member" <<'PY'
+          import sys
+          import zipfile
+          try:
+              names = zipfile.ZipFile(sys.argv[1]).namelist()
+          except Exception:
+              sys.exit(1)
+          sys.exit(0 if any(name.endswith(sys.argv[2]) for name in names) else 1)
+          PY
+            status=$?
+            rm -rf "$tmp"
+            return $status
+          }
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
             if printf '%s\n' "$assets" | grep -qx "$macos_asset" && \
-               printf '%s\n' "$assets" | grep -qx "$windows_asset"; then
-              echo "release $TAG already publishes both platform archives; nothing to do"
+               printf '%s\n' "$assets" | grep -qx "$windows_asset" && \
+               archive_has_runtime "$macos_asset" "bin/zypher_runtime" && \
+               archive_has_runtime "$windows_asset" "bin/zypher_runtime.exe"; then
+              echo "release $TAG already publishes both complete archives; nothing to do"
               exit 0
             fi
-            echo "release $TAG is missing a platform archive; re-running the release build"
+            echo "release $TAG has missing or incomplete archives; re-running the release build"
           fi
           echo "dispatching release for $TAG"
           gh workflow run release.yml --ref main -f "tag=$TAG"
