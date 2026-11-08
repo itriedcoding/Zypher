@@ -11,7 +11,7 @@
     <NoWarn>$(NoWarn);CA1401;CA2101;SYSLIB1054;CS1591</NoWarn>
     <AssemblyName>Zypher.Scripting</AssemblyName>
     <RootNamespace>Zypher.Scripting</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Description>Zypher engine gameplay scripting runtime (C#).</Description>
   </PropertyGroup>
 

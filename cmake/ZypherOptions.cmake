@@ -68,7 +68,7 @@ foreach(unimplemented
         ZYPHER_WITH_LUA ZYPHER_WITH_SLANG)
     if(${unimplemented})
         message(FATAL_ERROR
-            "${unimplemented}=ON is not implemented in Zypher 0.1.0. The dependency free "
+            "${unimplemented}=ON is not implemented in Zypher 0.1.1. The dependency free "
             "platform layer, software rasteriser, null audio device and native C# script host "
             "are used instead. See docs/roadmap.md for the integration plan.")
     endif()

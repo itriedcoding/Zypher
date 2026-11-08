@@ -93,7 +93,7 @@ export function parseProject(value: unknown): Project {
   const issues: string[] = [];
   const project: Project = {
     name: requireString(source, "name", "Untitled Project", issues),
-    version: requireString(source, "version", "0.1.0", issues),
+    version: requireString(source, "version", "0.1.1", issues),
     assetRoot: requireString(source, "assetRoot", "assets", issues),
     output: requireString(source, "output", "dist/assets.zpkg", issues),
     scene: requireString(source, "scene", "scene.zscene", issues),

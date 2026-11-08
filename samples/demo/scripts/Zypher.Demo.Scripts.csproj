@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Zypher.Demo.Scripts</AssemblyName>
     <RootNamespace>Zypher.Demo.Scripts</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <!-- NativeAOT settings used when publishing the game module. -->
     <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
     <NativeLib>Shared</NativeLib>

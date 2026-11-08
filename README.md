@@ -14,11 +14,32 @@ simulate → render → verify) runs headlessly so it can be tested in CI.
 C++23 engine core   Rust asset cooker   C# gameplay (NativeAOT)
        \                  |                  /
         \---- .zpkg pack file --------------/
-                       |
+                       | 
         runtime (zypher_runtime) + editor (Qt 6 / QML + TypeScript)
 ```
 
-## Status — 0.1.0 "Foundations"
+## Download
+
+| Platform | Download |
+| --- | --- |
+| Windows 10/11 x64 | [zypher-0.1.1-windows-x64.exe](https://github.com/itriedcoding/Zypher/releases/latest/download/zypher-0.1.1-windows-x64.exe) |
+| macOS (Apple silicon and Intel) | [zypher-0.1.1-macos-universal.dmg](https://github.com/itriedcoding/Zypher/releases/latest/download/zypher-0.1.1-macos-universal.dmg) |
+
+The Windows download is an installer: run it, and when it finishes it opens the
+**Zypher** console, which renders the demo scene, prints the report, keeps the
+window open and writes `frame.png` + `report.json` under
+`%LOCALAPPDATA%\Zypher\artifacts`. The Start Menu shortcut opens the same
+launcher; use `Zypher.cmd --help` for the runtime options.
+
+The macOS disk image contains `Zypher.command` — open the image and double-click
+it. Terminal stays open after the demo renders (`~/Zypher/artifacts`), and an
+`Applications` shortcut is included so the files can be dragged into place.
+
+Portable `.zip` builds and `.sha256` checksums for every download are on the
+[releases page](https://github.com/itriedcoding/Zypher/releases). Details in
+[docs/releases.md](docs/releases.md).
+
+## Status — 0.1.1 "Foundations"
 
 This milestone ships a complete, tested core and toolchain. It is not yet a
 drop-in Unity replacement; GPU backends and third-party integrations are the
@@ -41,6 +62,7 @@ next milestone and are listed honestly in [docs/roadmap.md](docs/roadmap.md).
 | Editor core | Project/session model with selection, transform edits, rename/add/remove, reorder, undo/redo, save |
 | Editor UI | QML panels (hierarchy, inspector, asset browser, console) and their TypeScript logic + tests |
 | Tooling | Python asset validation, reproducible release packaging, one-command verification |
+| Packaging | Inno Setup installer for Windows, disk image with launcher for macOS, portable zips, checksums |
 | CI | Linux headless core tests, Rust, TypeScript, C#, macOS and Windows builds; tag releases |
 
 **Not wired up yet** (options fail fast instead of silently doing nothing):
@@ -140,7 +162,7 @@ See [docs/scripting.md](docs/scripting.md).
 - [Scripting](docs/scripting.md) — C# ABI, lifecycle, publishing
 - [Editor](docs/editor.md) — Qt/QML shell and TypeScript panels
 - [Roadmap](docs/roadmap.md) — integration status for the full technology list
-- [Releases](docs/releases.md) — artifacts, checksums, how they are built
+- [Releases](docs/releases.md) — downloads, installers, checksums, how they are built
 - [Contributing](CONTRIBUTING.md)
 
 ## Repository layout
@@ -150,7 +172,7 @@ engine/        C++23 engine (core, assets, scene, physics, nav, render, script h
 engine/shaders GLSL / HLSL / MSL / Slang standard shaders
 engine/scripting/csharp  C# gameplay runtime (Zypher.Scripting)
 editor/        editor core, Qt/QML shell and TypeScript panel logic
-tools/         Rust asset cooker, Python automation, C# test harness
+tools/         Rust asset cooker, Python automation, C# test harness, installers
 tests/         engine unit + integration tests
 samples/demo/  demo project, scene, meshes and gameplay scripts
 docs/          architecture, formats, scripting, editor, roadmap, releases

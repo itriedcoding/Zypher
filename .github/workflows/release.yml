@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.1.0)"
+        description: "Tag to release (e.g. v0.1.1)"
         required: true
         type: string
 
@@ -107,6 +107,8 @@ jobs:
             cp -R samples "$prefix/share/zypher/samples"
             cp -R docs "$prefix/share/zypher/docs"
             cp README.md LICENSE "$prefix/share/zypher/"
+            # Double-click entry point: renders the demo and keeps the window open.
+            install -m 755 tools/installer/macos/Zypher.command "$prefix/Zypher.command"
 
             python3 tools/scripts/package_release.py \
                 --version "$version" --platform macos-universal \
@@ -115,7 +117,7 @@ jobs:
           import sys
           import zipfile
           members = zipfile.ZipFile(sys.argv[1]).namelist()
-          for required in ("bin/zypher_runtime", "lib/libzypher_engine.a"):
+          for required in ("bin/zypher_runtime", "lib/libzypher_engine.a", "Zypher.command"):
               if not any(name.endswith(required) for name in members):
                   raise SystemExit(f"packaged archive is missing {required}")
           print(f"packaged archive verified ({len(members)} files)")
@@ -123,10 +125,39 @@ jobs:
 
             dmg="zypher-${version}-macos-universal.dmg"
             rm -f "dist/$dmg"
-            hdiutil create -volname "Zypher ${version}" -srcfolder "$prefix" -ov -format UDZO "dist/$dmg" > /dev/null
+            # The image holds the payload plus an Applications shortcut, so the
+            # download can be dragged into place like any other macOS app.
+            dmg_src="$RUNNER_TEMP/dmg-src"
+            rm -rf "$dmg_src"
+            cp -R "$prefix" "$dmg_src"
+            ln -s /Applications "$dmg_src/Applications"
+            hdiutil create -volname "Zypher ${version}" -srcfolder "$dmg_src" -ov -format UDZO "dist/$dmg" > /dev/null
             test -s "dist/$dmg"
+
+            # Prove the image is usable: mount it, run the launcher and the
+            # runtime from the mounted volume, then detach.
+            mount_point="$RUNNER_TEMP/dmg-mnt"
+            rm -rf "$mount_point" && mkdir -p "$mount_point"
+            hdiutil attach "dist/$dmg" -nobrowse -readonly -mountpoint "$mount_point" > /dev/null
+            if [ ! -x "$mount_point/Zypher.command" ] || [ ! -L "$mount_point/Applications" ]; then
+              echo "::error::the disk image is missing Zypher.command or the Applications shortcut"
+              hdiutil detach "$mount_point" > /dev/null || true
+              return 1
+            fi
+            reported=$("$mount_point/Zypher.command" --version)
+            echo "mounted launcher reported: $reported"
+            case "$reported" in
+              *"$version"*) ;;
+              *)
+                echo "::error::the mounted runtime reported '${reported}' instead of ${version}"
+                hdiutil detach "$mount_point" > /dev/null || true
+                return 1
+                ;;
+            esac
+            hdiutil detach "$mount_point" > /dev/null
+
             ( cd dist && shasum -a 256 "$dmg" > "$dmg.sha256" )
-            echo "created $dmg"
+            echo "created and verified $dmg"
           }
           run_stage
       - uses: actions/upload-artifact@v4
@@ -197,23 +228,98 @@ jobs:
           Copy-Item samples (Join-Path $share 'samples') -Recurse
           Copy-Item docs (Join-Path $share 'docs') -Recurse
           Copy-Item README.md, LICENSE $share
+          # Double-click entry point: renders the demo and keeps the console open.
+          Copy-Item tools/installer/windows/Zypher.cmd (Join-Path $prefix 'Zypher.cmd')
 
           python tools/scripts/package_release.py --version $version --platform windows-x64 --input $prefix --output dist
           if ($LASTEXITCODE -ne 0) { throw "packaging failed with $LASTEXITCODE" }
-          python -c "import sys, zipfile; members = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(n.endswith(sys.argv[2]) for n in members) else 1)" "dist/zypher-$version-windows-x64.zip" 'bin/zypher_runtime.exe'
-          if ($LASTEXITCODE -ne 0) { throw 'packaged archive is missing bin/zypher_runtime.exe' }
+          python -c "import sys, zipfile; m = zipfile.ZipFile(sys.argv[1]).namelist(); missing = [n for n in ('bin/zypher_runtime.exe', 'Zypher.cmd') if not any(x.endswith(n) for x in m)]; sys.exit(1 if missing else 0)" "dist/zypher-$version-windows-x64.zip"
+          if ($LASTEXITCODE -ne 0) { throw 'packaged archive is missing bin/zypher_runtime.exe or Zypher.cmd' }
+      - name: Build and verify Windows installer
+        shell: pwsh
+        run: |
+          # A real installer (Inno Setup), not a self-extracting archive: it
+          # installs the files, adds Start Menu and optional desktop shortcuts,
+          # registers an uninstaller and offers to launch Zypher. The previous
+          # 7-Zip SFX build only unpacked to a temporary folder and exited,
+          # which looked like a console window opening and closing.
+          $ErrorActionPreference = 'Stop'
+          $version = $env:VERSION.TrimStart('v')
+          $prefix = Join-Path $env:GITHUB_WORKSPACE 'stage'
+          $dist = Join-Path $env:GITHUB_WORKSPACE 'dist'
 
-          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
-          if (-not (Test-Path $sevenZip)) { throw '7-Zip is required to build the self-extracting installer' }
+          $isccCandidates = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe',
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+          )
+          $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            Write-Host 'Inno Setup is not on this image; installing it with Chocolatey'
+            choco install innosetup --yes --no-progress | Out-Host
+            $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw 'ISCC.exe (Inno Setup) is required to build the Windows installer' }
+          Write-Host "using $iscc"
+
+          & $iscc "/DMyVersion=$version" "/DStageDir=$prefix" "/DOutputDir=$dist" 'tools/installer/zypher.iss' | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+
           $installerName = "zypher-$version-windows-x64.exe"
-          $installer = Join-Path 'dist' $installerName
-          if (Test-Path $installer) { Remove-Item $installer -Force }
-          & $sevenZip a -mx=9 -y -sfx $installer (Join-Path $prefix '*') | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw "7-Zip SFX failed with $LASTEXITCODE" }
+          $installer = Join-Path $dist $installerName
           if (-not (Test-Path $installer)) { throw 'the Windows installer was not created' }
+          $installerBytes = (Get-Item $installer).Length
+          if ($installerBytes -lt 500KB) { throw "the Windows installer is suspiciously small ($installerBytes bytes)" }
+
+          # Install silently, then exercise the installed copy the way a user would.
+          $probe = Join-Path $env:RUNNER_TEMP 'ZypherInstallProbe'
+          if (Test-Path $probe) { Remove-Item $probe -Recurse -Force }
+          $installLog = Join-Path $env:RUNNER_TEMP 'zypher-install.log'
+          $install = Start-Process -FilePath $installer `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$probe", "/LOG=$installLog" `
+            -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            if (Test-Path $installLog) {
+              Get-Content $installLog | Select-Object -Last 40 | ForEach-Object { Write-Host "::error::$_" }
+            }
+            throw "the installer exited with $($install.ExitCode)"
+          }
+
+          $installedRuntime = Join-Path $probe 'bin/zypher_runtime.exe'
+          $installedLauncher = Join-Path $probe 'Zypher.cmd'
+          if (-not (Test-Path $installedRuntime)) { throw 'the installer did not lay down bin\zypher_runtime.exe' }
+          if (-not (Test-Path $installedLauncher)) { throw 'the installer did not lay down Zypher.cmd' }
+          if (-not (Test-Path (Join-Path $probe 'share/zypher/samples/demo/scene.zscene'))) { throw 'the installer did not lay down the demo scene' }
+
+          $reported = & $installedRuntime --version
+          Write-Host "installed runtime: $reported"
+          if ($LASTEXITCODE -ne 0) { throw 'the installed runtime failed to report its version' }
+          if ($reported -notmatch [regex]::Escape($version)) { throw "the installed runtime reported '$reported' instead of $version" }
+
+          $launched = cmd /c "`"$installedLauncher`" --version"
+          Write-Host "launcher output: $launched"
+          if ($launched -notmatch [regex]::Escape($version)) { throw 'Zypher.cmd did not reach the runtime' }
+
+          $artifacts = Join-Path $probe 'probe-artifacts'
+          & $installedRuntime --scene (Join-Path $probe 'share/zypher/samples/demo/scene.zscene') `
+            --pack (Join-Path $probe 'share/zypher/samples/demo/dist/demo.zpkg') `
+            --output $artifacts --width 320 --height 180 --frames 1 --steps 30 --dump-frame | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw 'the installed runtime failed to render the demo' }
+          if (-not (Test-Path (Join-Path $artifacts 'frame.png'))) { throw 'the installed runtime did not write frame.png' }
+
+          $uninstaller = Join-Path $probe 'unins000.exe'
+          if (Test-Path $uninstaller) {
+            $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+            if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
+            if (Test-Path (Join-Path $probe 'bin')) { throw 'the uninstaller left files behind' }
+            Write-Host 'uninstaller verified'
+          } else {
+            Write-Host '::warning::no uninstaller was generated'
+          }
+
           $installerHash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
-          "$installerHash  $installerName" | Out-File -Encoding ascii (Join-Path 'dist' "$installerName.sha256")
-          Write-Host "created $installerName ($((Get-Item $installer).Length) bytes)"
+          "$installerHash  $installerName" | Out-File -Encoding ascii (Join-Path $dist "$installerName.sha256")
+          Write-Host "created $installerName ($installerBytes bytes); silent install, launcher, demo render and uninstall verified"
 
       - uses: actions/upload-artifact@v4
         with:

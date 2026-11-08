@@ -105,10 +105,19 @@ jobs:
         run: |
           mkdir -p stage/bin stage/share
           cp README.md stage/share/
+          cp tools/installer/macos/Zypher.command stage/
           python3 tools/scripts/package_release.py --version 0.0.0 \
               --platform smoke --input stage --output dist
           test -f dist/zypher-0.0.0-smoke.zip
           test -f dist/zypher-0.0.0-smoke.sha256
+          python3 - <<'PY'
+          import stat, zipfile
+          info = zipfile.ZipFile('dist/zypher-0.0.0-smoke.zip').getinfo('zypher-0.0.0-smoke/Zypher.command')
+          mode = info.external_attr >> 16
+          if not stat.S_IMODE(mode) & stat.S_IXUSR:
+              raise SystemExit('Zypher.command is not executable inside the archive')
+          print('Zypher.command is executable in the archive')
+          PY
 
   macos:
     name: macOS build + tests
@@ -153,12 +162,25 @@ jobs:
           fi
       - name: Package smoke test (dmg)
         run: |
-          rm -rf "$RUNNER_TEMP/dmg-src" && mkdir -p "$RUNNER_TEMP/dmg-src/bin"
-          cp build/bin/zypher_runtime "$RUNNER_TEMP/dmg-src/bin/"
-          rm -f "$RUNNER_TEMP/zypher-smoke.dmg"
-          hdiutil create -volname ZypherSmoke -srcfolder "$RUNNER_TEMP/dmg-src" \
-              -ov -format UDZO "$RUNNER_TEMP/zypher-smoke.dmg" > /dev/null
-          test -s "$RUNNER_TEMP/zypher-smoke.dmg"
+          set -o pipefail
+          src="$RUNNER_TEMP/dmg-src"
+          rm -rf "$src" && mkdir -p "$src/bin"
+          cp build/bin/zypher_runtime "$src/bin/"
+          cp tools/installer/macos/Zypher.command "$src/"
+          chmod 755 "$src/Zypher.command"
+          ln -s /Applications "$src/Applications"
+          dmg="$RUNNER_TEMP/zypher-smoke.dmg"
+          rm -f "$dmg"
+          hdiutil create -volname ZypherSmoke -srcfolder "$src" -ov -format UDZO "$dmg" > /dev/null
+          test -s "$dmg"
+          mount_point="$RUNNER_TEMP/dmg-mnt"
+          rm -rf "$mount_point" && mkdir -p "$mount_point"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" > /dev/null
+          test -x "$mount_point/Zypher.command"
+          test -L "$mount_point/Applications"
+          "$mount_point/Zypher.command" --version
+          hdiutil detach "$mount_point" > /dev/null
+          echo "disk image mounts and its launcher runs"
 
   windows:
     name: Windows build + tests
@@ -186,21 +208,56 @@ jobs:
         run: cargo run --quiet --manifest-path tools/assetcooker/Cargo.toml -- --project samples/demo/zypher.project.json
       - name: Test
         run: ctest --test-dir build -C RelWithDebInfo --output-on-failure
-      - name: Package smoke test (exe)
+      - name: Package smoke test (exe installer)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
-          if (-not (Test-Path $sevenZip)) { throw '7-Zip is required to build the self-extracting installer' }
-          $src = Join-Path $env:RUNNER_TEMP 'sfx-src'
-          if (Test-Path $src) { Remove-Item $src -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $src | Out-Null
+          $stage = Join-Path $env:RUNNER_TEMP 'installer-stage'
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path (Join-Path $stage 'bin') | Out-Null
           $runtime = Get-ChildItem -Path build -Recurse -Filter 'zypher_runtime.exe' -File | Select-Object -First 1
           if (-not $runtime) { throw 'zypher_runtime.exe was not built' }
-          Copy-Item $runtime.FullName $src
-          $out = Join-Path $env:RUNNER_TEMP 'zypher-smoke.exe'
-          if (Test-Path $out) { Remove-Item $out -Force }
-          & $sevenZip a -mx=9 -y -sfx $out (Join-Path $src '*') | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw "7-Zip SFX failed with $LASTEXITCODE" }
-          if (-not (Test-Path $out)) { throw 'the self-extracting installer was not created' }
-          Write-Host "smoke installer: $((Get-Item $out).Length) bytes"
+          Copy-Item $runtime.FullName (Join-Path $stage 'bin/zypher_runtime.exe')
+          Copy-Item tools/installer/windows/Zypher.cmd $stage
+          $dist = Join-Path $env:RUNNER_TEMP 'installer-dist'
+          if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+
+          $isccCandidates = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe',
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+          )
+          $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            Write-Host 'Inno Setup is not on this image; installing it with Chocolatey'
+            choco install innosetup --yes --no-progress | Out-Host
+            $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw 'ISCC.exe (Inno Setup) is required to build the Windows installer' }
+
+          & $iscc '/DMyVersion=0.0.0' "/DStageDir=$stage" "/DOutputDir=$dist" 'tools/installer/zypher.iss' | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          $installer = Join-Path $dist 'zypher-0.0.0-windows-x64.exe'
+          if (-not (Test-Path $installer)) { throw 'the installer was not created' }
+
+          $probe = Join-Path $env:RUNNER_TEMP 'ZypherSmokeInstall'
+          if (Test-Path $probe) { Remove-Item $probe -Recurse -Force }
+          $install = Start-Process -FilePath $installer `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$probe" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "the installer exited with $($install.ExitCode)" }
+
+          $installedRuntime = Join-Path $probe 'bin/zypher_runtime.exe'
+          $installedLauncher = Join-Path $probe 'Zypher.cmd'
+          if (-not (Test-Path $installedRuntime)) { throw 'the installer did not lay down bin\zypher_runtime.exe' }
+          if (-not (Test-Path $installedLauncher)) { throw 'the installer did not lay down Zypher.cmd' }
+          $reported = cmd /c "`"$installedLauncher`" --version"
+          Write-Host "installed launcher reported: $reported"
+          if ($reported -notmatch 'Zypher') { throw 'the installed launcher did not reach the runtime' }
+
+          $uninstaller = Join-Path $probe 'unins000.exe'
+          if (Test-Path $uninstaller) {
+            $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+            if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
+          }
+          Write-Host "installer works: $((Get-Item $installer).Length) bytes, silent install and uninstall verified"

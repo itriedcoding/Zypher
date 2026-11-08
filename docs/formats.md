@@ -104,7 +104,7 @@ Hand-editable and comment tolerant (`//`, `/* */`).
 ```json
 {
   "name": "Zypher Demo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "assetRoot": "assets",
   "output": "dist/demo.zpkg",
   "scene": "scene.zscene",

@@ -19,7 +19,7 @@ import zipfile
 from pathlib import Path
 
 FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
-EXECUTABLE_SUFFIXES = {".exe", ".dll", ".dylib", ".so", ""}
+EXECUTABLE_SUFFIXES = {".exe", ".dll", ".dylib", ".so", ".command", ".sh", ""}
 
 
 def collect_files(root: Path) -> list[Path]:
