@@ -24,6 +24,30 @@ namespace {
     return fs::path(encoded);
 }
 
+// filesystem path -> UTF-8 std::string. path::string() would use the ANSI code
+// page on Windows and mangle non-ASCII project paths.
+[[nodiscard]] std::string fromPath(const fs::path& value) {
+    const std::u8string encoded = value.generic_u8string();
+    return std::string(reinterpret_cast<const char*>(encoded.data()), encoded.size());
+}
+
+#if defined(ZYPHER_PLATFORM_WINDOWS)
+[[nodiscard]] std::string wideToUtf8(std::wstring_view text) {
+    if (text.empty()) {
+        return {};
+    }
+    const auto length = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0,
+                                            nullptr, nullptr);
+    if (length <= 0) {
+        return {};
+    }
+    std::string result(static_cast<usize>(length), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), length, nullptr,
+                        nullptr);
+    return result;
+}
+#endif
+
 } // namespace
 
 std::optional<std::vector<u8>> FileSystem::readBinary(const std::string& path) {
@@ -171,7 +195,7 @@ std::string FileSystem::absolute(std::string_view path) {
     if (errorCode) {
         return std::string(path);
     }
-    return normalize(absolutePath.string());
+    return normalize(fromPath(absolutePath));
 }
 
 std::vector<std::string> FileSystem::listFiles(const std::string& directory, bool recursive) {
@@ -184,7 +208,7 @@ std::vector<std::string> FileSystem::listFiles(const std::string& directory, boo
         std::error_code entryError;
         for (const auto& entry : iterator) {
             if (entry.is_regular_file(entryError)) {
-                files.push_back(normalize(entry.path().generic_string()));
+                files.push_back(normalize(fromPath(entry.path())));
             }
         }
     };
@@ -206,15 +230,16 @@ std::vector<std::string> FileSystem::listFiles(const std::string& directory, boo
 }
 
 std::string FileSystem::currentWorkingDirectory() {
-    return normalize(fs::current_path().string());
+    return normalize(fromPath(fs::current_path()));
 }
 
 std::string FileSystem::executableDirectory() {
 #if defined(ZYPHER_PLATFORM_WINDOWS)
-    char buffer[4096]{};
-    const auto length = GetModuleFileNameA(nullptr, buffer, static_cast<DWORD>(sizeof(buffer)));
+    std::wstring buffer(4096, L'\0');
+    const auto length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
     if (length > 0) {
-        return parentPath(std::string(buffer, length));
+        buffer.resize(static_cast<usize>(length));
+        return parentPath(wideToUtf8(buffer));
     }
     return currentWorkingDirectory();
 #elif defined(ZYPHER_PLATFORM_MACOS)
@@ -224,7 +249,7 @@ std::string FileSystem::executableDirectory() {
     std::error_code errorCode;
     const auto target = fs::read_symlink("/proc/self/exe", errorCode);
     if (!errorCode) {
-        return parentPath(normalize(target.string()));
+        return parentPath(normalize(fromPath(target)));
     }
     return currentWorkingDirectory();
 #endif
@@ -233,7 +258,7 @@ std::string FileSystem::executableDirectory() {
 std::string FileSystem::temporaryDirectory() {
     std::error_code errorCode;
     const auto directory = fs::temp_directory_path(errorCode);
-    return errorCode ? std::string(".") : normalize(directory.string());
+    return errorCode ? std::string(".") : normalize(fromPath(directory));
 }
 
 u64 FileSystem::fileSize(const std::string& path) {

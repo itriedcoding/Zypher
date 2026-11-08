@@ -18,6 +18,23 @@
 namespace zy {
 namespace {
 
+#if defined(ZYPHER_PLATFORM_WINDOWS)
+// Module paths are UTF-8 everywhere in the engine, but the Windows loader and
+// LoadLibraryA use the ANSI code page. Convert so non-ASCII paths still load.
+[[nodiscard]] std::wstring toWidePath(std::string_view text) {
+    if (text.empty()) {
+        return {};
+    }
+    const auto length = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if (length <= 0) {
+        return {};
+    }
+    std::wstring wide(static_cast<usize>(length), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), length);
+    return wide;
+}
+#endif
+
 ZypherVec3 toApi(const Vec3& value) { return ZypherVec3{value.x, value.y, value.z}; }
 Vec3 fromApi(const ZypherVec3& value) { return Vec3{value.x, value.y, value.z}; }
 ZypherEntityHandle toApi(Entity entity) { return ZypherEntityHandle{entity.index, entity.generation}; }
@@ -55,7 +72,7 @@ Status ScriptHost::loadModule(const std::string& libraryPath) {
     }
 
 #if defined(ZYPHER_PLATFORM_WINDOWS)
-    HMODULE library = LoadLibraryA(libraryPath.c_str());
+    HMODULE library = LoadLibraryW(toWidePath(libraryPath).c_str());
     if (library == nullptr) {
         return Error{ErrorCode::Io, "LoadLibrary failed for '" + libraryPath + "' (error " +
                                         std::to_string(GetLastError()) + ")"};
