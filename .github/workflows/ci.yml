@@ -190,7 +190,7 @@ jobs:
 
           editor_app=$(find build -type d -name 'zypher_editor.app' -print -quit)
           test -n "$editor_app"
-          "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite -no-translations \
+          "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite \
               "-qmldir=$GITHUB_WORKSPACE/editor/qml" > /dev/null
           cp -R "$editor_app" "$src/Zypher Editor.app"
           app_platforms="$src/Zypher Editor.app/Contents/PlugIns/platforms"

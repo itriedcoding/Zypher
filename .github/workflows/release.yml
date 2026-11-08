@@ -147,7 +147,7 @@ jobs:
 
             # Editor app bundle with its Qt frameworks, inside the disk image.
             echo "::notice::stage: deploying the Qt runtime into the editor app"
-            if ! "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite -no-translations \
+            if ! "$QT_DIR/bin/macdeployqt" "$editor_app" -always-overwrite \
                 "-qmldir=$GITHUB_WORKSPACE/editor/qml" > "$RUNNER_TEMP/macdeployqt.log" 2>&1; then
               echo "::error::macdeployqt failed"
               tail -n 40 "$RUNNER_TEMP/macdeployqt.log" | while IFS= read -r line; do

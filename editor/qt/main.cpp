@@ -5,14 +5,27 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QStringList>
 
 #include <cstdio>
 
 namespace {
 
-// Prints where the embedded QML actually landed; used when loading fails so CI
-// reports the real cause instead of a bare exit code.
-void reportResources() {
+QStringList g_qtMessages;
+
+void captureMessages(QtMsgType, const QMessageLogContext&, const QString& message) {
+    g_qtMessages.append(message);
+}
+
+// Prints where the embedded QML landed plus the Qt warnings raised while
+// loading it; used when loading fails so CI reports the real cause.
+void reportFailure(const QQmlApplicationEngine& engine) {
+    std::fprintf(stderr, "error: the editor UI failed to load (module Zypher.Editor, Main.qml)\n");
+    std::fprintf(stderr, "root objects: %lld\n", static_cast<long long>(engine.rootObjects().size()));
+    for (const QString& message : g_qtMessages) {
+        std::fprintf(stderr, "qt: %s\n", message.toUtf8().constData());
+    }
+
     QDir root(QStringLiteral(":/qt/qml"));
     std::fprintf(stderr, "embedded QML root: %s\n", root.path().toUtf8().constData());
     for (const QString& entry : root.entryList(QDir::AllDirs | QDir::NoDotAndDotDot)) {
@@ -26,14 +39,25 @@ void reportResources() {
     } else {
         std::fprintf(stderr, "  module dir :/qt/qml/Zypher/Editor is missing\n");
     }
+
+    QDir importPath(qEnvironmentVariable("QML2_IMPORT_PATH", QString()));
+    std::fprintf(stderr, "QML import paths: %s\n",
+                 importPath.path().toUtf8().constData());
+    std::fflush(stderr);
 }
 
 } // namespace
 
 int main(int argc, char* argv[]) {
+    qInstallMessageHandler(captureMessages);
+
     QGuiApplication application(argc, argv);
     application.setApplicationName("Zypher Editor");
     application.setOrganizationName("Zypher");
+
+    for (const QString& path : QCoreApplication::libraryPaths()) {
+        std::fprintf(stderr, "library path: %s\n", path.toUtf8().constData());
+    }
 
     EditorController controller;
 
@@ -52,9 +76,6 @@ int main(int argc, char* argv[]) {
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("editor", &controller);
-    QObject::connect(
-        &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
-        [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
 
     // The QML files are embedded in this executable (editor/CMakeLists.txt).
     engine.loadFromModule("Zypher.Editor", "Main");
@@ -63,8 +84,7 @@ int main(int argc, char* argv[]) {
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Zypher/Editor/Main.qml")));
     }
     if (engine.rootObjects().isEmpty()) {
-        std::fprintf(stderr, "error: the editor UI failed to load (module Zypher.Editor, Main.qml)\n");
-        reportResources();
+        reportFailure(engine);
         return 1;
     }
 

@@ -120,7 +120,7 @@ python3 tools/scripts/package_release.py --version 0.1.2 \
 
 # macOS disk image (editor app included)
 cp -R build/bin/zypher_editor.app "stage/Zypher Editor.app"
-"$QT_DIR/bin/macdeployqt" "stage/Zypher Editor.app" -always-overwrite -no-translations -qmldir=editor/qml
+"$QT_DIR/bin/macdeployqt" "stage/Zypher Editor.app" -always-overwrite -qmldir=editor/qml
 cp -R stage /tmp/dmg-src && ln -s /Applications /tmp/dmg-src/Applications
 hdiutil create -volname "Zypher 0.1.2" -srcfolder /tmp/dmg-src -ov -format UDZO \
         dist/zypher-0.1.2-macos-universal.dmg
